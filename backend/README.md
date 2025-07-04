@@ -41,7 +41,7 @@ Replace `your_openai_api_key` with your actual OpenAI API key.
 2. **Create the database and user:**
    ```sql
    CREATE DATABASE quantara;
-   CREATE USER root WITH PASSWORD '1412';
+   CREATE USER root WITH PASSWORD '';
    GRANT ALL PRIVILEGES ON DATABASE quantara TO root;
    ```
 3. **Create required tables:**
