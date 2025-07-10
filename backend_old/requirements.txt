@@ -1,0 +1,7 @@
+langchain
+langgraph
+langchain-openai
+chainlit
+fastapi
+uvicorn
+openai

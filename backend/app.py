@@ -1,64 +1,28 @@
-from langchain_core.messages import HumanMessage, AIMessageChunk
-from langchain_core.runnables.config import RunnableConfig
-from langchain_openai import ChatOpenAI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.cors import CORSMiddleware
 
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import START, MessagesState, StateGraph
-import chainlit as cl
+from chainlit.auth import create_jwt
+from chainlit.user import User
+from chainlit.utils import mount_chainlit
+from chainlit.server import _authenticate_user
 
-from dotenv import load_dotenv
+app = FastAPI()
 
-load_dotenv()
-
-
-workflow = StateGraph(state_schema=MessagesState)
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-
-def call_model(state: MessagesState):
-    response = model.invoke(state["messages"])
-    return {"messages": response}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8081"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-workflow.add_edge(START, "model")
-workflow.add_node("model", call_model)
-
-memory = MemorySaver()
-
-app = workflow.compile(checkpointer=memory)
-
-
-@cl.password_auth_callback
-def auth_callback(username: str, password: str):
-    # Fetch the user matching username from your database
-    # and compare the hashed password with the value stored in the database
-    if (username, password) == ("admin", "admin"):
-        return cl.User(
-            identifier="admin", metadata={"role": "admin", "provider": "credentials"}
-        )
-    else:
-        return None
+@app.get("/custom-auth")
+async def custom_auth(request: Request):
+    # Verify the user's identity with custom logic.
+    user = User(identifier="Test User")
+    return await _authenticate_user(request, user)
 
 
-@cl.on_chat_resume
-async def on_chat_resume(thread):
-    pass
-
-
-@cl.on_message
-async def main(message: cl.Message):
-    answer = cl.Message(content="")
-    await answer.send()
-
-    config: RunnableConfig = {
-        "configurable": {"thread_id": cl.context.session.thread_id}
-    }
-
-    for msg, _ in app.stream(
-        {"messages": [HumanMessage(content=message.content)]},
-        config,
-        stream_mode="messages",
-    ):
-        if isinstance(msg, AIMessageChunk):
-            answer.content += msg.content  # type: ignore
-            await answer.update()
+mount_chainlit(app=app, target="cl_app.py", path="/chainlit")
