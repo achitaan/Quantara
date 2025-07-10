@@ -1,3 +1,7 @@
 chainlit
 openai
 uvicorn
+langchain
+langgraph
+langchain-openai
+fastapi
