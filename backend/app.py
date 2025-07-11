@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
+from chainlit.auth import create_jwt
 from chainlit.user import User
 from chainlit.utils import mount_chainlit
 from chainlit.server import _authenticate_user
@@ -9,7 +11,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:8081", "http://localhost:80"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,7 +22,6 @@ app.add_middleware(
 async def custom_auth(request: Request):
     # Verify the user's identity with custom logic.
     user = User(identifier="Test User")
-
     return await _authenticate_user(request, user)
 
 

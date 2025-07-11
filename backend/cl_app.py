@@ -1,45 +1,71 @@
 import os
-from openai import AsyncOpenAI
+from dotenv import load_dotenv
 
 import chainlit as cl
+from langchain_core.messages import HumanMessage, AIMessageChunk
+from langchain_core.runnables.config import RunnableConfig
+from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import START, MessagesState, StateGraph
+
+load_dotenv()
+
+# --- LangChain Workflow Setup ---
+workflow = StateGraph(state_schema=MessagesState)
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 
-client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-
-settings = {
-    "model": "gpt-3.5-turbo",
-    "temperature": 0.7,
-    "max_tokens": 500,
-    "top_p": 1,
-    "frequency_penalty": 0,
-    "presence_penalty": 0,
-}
+def call_model(state: MessagesState):
+    response = model.invoke(state["messages"])
+    return {"messages": response}
 
 
+workflow.add_edge(START, "model")
+workflow.add_node("model", call_model)
+
+memory = MemorySaver()
+langgraph_app = workflow.compile(checkpointer=memory)
+
+# --- Authentication ---
+@cl.password_auth_callback
+def auth_callback(username: str, password: str):
+    # Replace with your own user lookup logic
+    if (username, password) == ("admin", "admin"):
+        return cl.User(
+            identifier="admin", metadata={"role": "admin", "provider": "credentials"}
+        )
+    return None
+
+
+# --- Chat Resume (optional) ---
+@cl.on_chat_resume
+async def on_chat_resume(thread):
+    # You can restore memory or state here if needed
+    pass
+
+
+# --- Chat Start (optional) ---
 @cl.on_chat_start
 async def on_chat_start():
-    cl.user_session.set(
-        "message_history",
-        [{"role": "system", "content": "You are a helpful assistant."}],
-    )
-    await cl.Message(content="Connected to Chainlit!").send()
+    await cl.Message(content="Connected to Chainlit with LangChain memory!").send()
 
 
+# --- Message Handler ---
 @cl.on_message
-async def on_message(message: cl.Message):
-    message_history = cl.user_session.get("message_history")
-    message_history.append({"role": "user", "content": message.content})
+async def main(message: cl.Message):
+    answer = cl.Message(content="")
+    await answer.send()
 
-    msg = cl.Message(content="")
-    await msg.send()
+    config: RunnableConfig = {
+        "configurable": {"thread_id": cl.context.session.thread_id}
+    }
 
-    stream = await client.chat.completions.create(
-        messages=message_history, stream=True, **settings
-    )
-
-    async for part in stream:
-        if token := part.choices[0].delta.content or "":
-            await msg.stream_token(token)
-
-    message_history.append({"role": "assistant", "content": msg.content})
-    await msg.update()
+    # Stream response from LangChain agent
+    for msg, _ in langgraph_app.stream(
+        {"messages": [HumanMessage(content=message.content)]},
+        config,
+        stream_mode="messages",
+    ):
+        if isinstance(msg, AIMessageChunk):
+            answer.content += msg.content  # type: ignore
+            await answer.update()
