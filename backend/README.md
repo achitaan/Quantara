@@ -8,7 +8,7 @@
 
    ```sql
    CREATE DATABASE quantara;
-   CREATE USER root WITH PASSWORD ___;
+   CREATE USER root WITH PASSWORD 'your_password';
    GRANT ALL PRIVILEGES ON DATABASE quantara TO root;
    ```
 
@@ -16,14 +16,12 @@
    Connect to the `quantara` database and run:
 
    ```sql
-   -- Thread table
+   -- Thread table (Chainlit expects only camelCase columns, no duplicates)
    CREATE TABLE "Thread" (
      id UUID PRIMARY KEY,
-     userId UUID,
-     createdAt TIMESTAMP,
-     created_at TIMESTAMP,
-     deletedAt TIMESTAMP,
-     uuid_id UUID
+     "userId" UUID,
+     "createdAt" TIMESTAMP,
+     "deletedAt" TIMESTAMP
    );
 
    -- User table
@@ -31,14 +29,15 @@
      id UUID PRIMARY KEY,
      identifier VARCHAR(255) UNIQUE NOT NULL,
      metadata JSONB,
-     createdAt TIMESTAMP,
-     updatedAt TIMESTAMP
+     "createdAt" TIMESTAMP,
+     "updatedAt" TIMESTAMP
    );
    ```
 
    > **Note:**  
-   > - Column names are case-sensitive.  
-   > - You may want to remove duplicate columns (e.g., `createdAt` vs `created_at`) for consistency.
+   > - Column names are case-sensitive and must match exactly what Chainlit expects.
+   > - Do **not** include duplicate or snake_case columns (e.g., `created_at`, `uuid_id`).
+   > - If you previously created the tables with extra columns, drop and recreate them as above.
 
 4. **Set Permissions**  
    As a superuser, run:
@@ -53,7 +52,7 @@
    In your `.env` file, set:
 
    ```
-   DATABASE_URL=postgresql://root:1412@localhost:5432/quantara
+   DATABASE_URL=postgresql://root:your_password@localhost:5432/quantara
    CHAINLIT_AUTH_SECRET=your_super_secret_key
    ```
 
@@ -61,6 +60,7 @@
    - If you see errors about missing columns, add them using `ALTER TABLE ... ADD COLUMN ...`.
    - If you see permission errors, re-run the GRANT statements above.
    - Make sure column names and casing match exactly what your app expects.
+   - If you get a `syntax error at or near ";"`, check for duplicate or incorrectly named columns and fix your schema.
 
 ---
 
