@@ -64,4 +64,4 @@
 
 ---
 
-This will ensure your database is ready for the app to run without schema or permission errors.
+This will ensure your database is ready for the app to run without schema or permission errors.``````
