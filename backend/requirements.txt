@@ -5,25 +5,43 @@ asyncpg
 yfinance
 uvicorn[standard]==0.23.2
 
+# LangChain ecosystem
 langgraph
-
 langchain==0.3.1
 langchain-community==0.3.1
 langchain-openai==0.2.1
 langchain-unstructured==0.1.5
 
+# Azure integrations
 azure-core==1.29.7
 azure-search-documents==11.6.0b4
 azure-identity==1.17.1
 azure-ai-documentintelligence==1.0.0b1
 
+# Data visualization and analysis
+plotly
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# HTTP and async
 requests==2.31.0
 aiofiles==23.2.1
 aiohttp==3.9.3
 aiohttp-retry==2.8.3
 async-timeout==4.0.3
 
+# Core utilities
 python-dotenv>=1.0.1
 tiktoken>=0.5.2
 faiss-cpu>=1.7.4
-PyPDF2>=3.0.1   
+PyPDF2>=3.0.1
+
+# Financial calculations and portfolio analysis
+yfinance>=0.2.0
+matplotlib>=3.7.0
+
+# Testing and evaluation
+ragas>=0.1.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0   

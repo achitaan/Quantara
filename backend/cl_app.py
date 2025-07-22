@@ -1,6 +1,7 @@
 import chainlit as cl
 from dotenv import load_dotenv
 from pathlib import Path
+from typing import TypedDict, Optional
 
 load_dotenv()  # ← makes OPENAI_API_KEY available for both LLM & embeddings
 
@@ -9,7 +10,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import HumanMessage, AIMessageChunk
+from langchain_core.messages import HumanMessage, AIMessageChunk, SystemMessage, AIMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain.chains import ConversationalRetrievalChain
 
@@ -21,6 +22,12 @@ from tools import (
     TOOL_HANDLERS
 )
 import json
+
+# ── Custom State for Chain-of-Thought ───────────────────────────────────────
+class CoTState(TypedDict):
+    messages: list
+    thinking: Optional[str]
+    show_thinking: Optional[bool]
 
 
 
@@ -37,25 +44,41 @@ _vectordb = FAISS.load_local(
 _retriever = _vectordb.as_retriever(search_kwargs={"k": 6})
 
 # ── LangGraph workflow ───────────────────────────────────────────────────────
-workflow = StateGraph(state_schema=MessagesState)
+workflow = StateGraph(state_schema=CoTState)
 llm = ChatOpenAI(model="gpt-4", temperature=0, streaming=True)
 
-async def handle_tool_call(tool_name: str, tool_args: dict):
-    """Handle tool calls and return results."""
-    try:
-        handler = get_tool_handler(tool_name)
-        if handler:
-            result = await handler(**tool_args)
-            return result
-        else:
-            return {"error": f"Tool '{tool_name}' not found"}
-    except Exception as e:
-        return {"error": f"Tool execution failed: {str(e)}"}
+def thinking_node(state: CoTState):
+    """Generate Chain-of-Thought reasoning before answering."""
+    last_user_msg = state["messages"][-1]
+    
+    # Create thinking prompt
+    thinking_prompt = f"""
+    You are Quantara-AI. Before answering the following question, think through your approach step-by-step.
 
-def call_rag_with_tools(state: MessagesState):
-    """Enhanced RAG with tool calling capability."""
-    last_user_msg = state["messages"][-1]  # HumanMessage
+    Question: {last_user_msg.content}
+
+    Provide your thinking process in this format:
+    **Thinking:**
+    - What type of question is this?
+    - What information do I need to gather?
+    - Which sources or tools might help?
+    - How should I structure my analysis?
+    - What are the key considerations?
+
+    Only provide the thinking process, not the final answer yet.
+    """
+    
+    response = llm.invoke([HumanMessage(content=thinking_prompt)])
+    
+    # Store thinking in state
+    state["thinking"] = response.content
+    return state
+
+def call_rag_with_cot(state: CoTState):
+    """Enhanced RAG with Chain-of-Thought integration."""
+    last_user_msg = state["messages"][-1]
     user_content = last_user_msg.content.lower()
+    thinking = state.get("thinking", "")
     
     # Simple pattern matching for tool usage
     if any(word in user_content for word in ["calculate portfolio", "portfolio metrics", "sharpe ratio"]):
@@ -82,7 +105,7 @@ def call_rag_with_tools(state: MessagesState):
                  "Example: Get Apple stock price for the last month"
     
     elif any(word in user_content for word in ["regulatory", "basel", "compliance"]):
-        # Use RAG for regulatory queries but mention regulatory tools
+        # Use RAG for regulatory queries
         chain = ConversationalRetrievalChain.from_llm(
             ChatOpenAI(model="gpt-4", temperature=0, streaming=True),
             _retriever,
@@ -90,8 +113,17 @@ def call_rag_with_tools(state: MessagesState):
             verbose=False,
         )
         
+        # Include thinking in the prompt for better context
+        enhanced_prompt = f"""
+        Previous thinking: {thinking}
+        
+        Now answer this question: {last_user_msg.content}
+        
+        Follow the Quantara style guide with thinking process visible.
+        """
+        
         response = chain.invoke(
-            {"question": last_user_msg.content, "chat_history": []}
+            {"question": enhanced_prompt, "chat_history": []}
         )
         
         answer = response["answer"]
@@ -105,7 +137,7 @@ def call_rag_with_tools(state: MessagesState):
         content += "\n\n💡 **Tip**: I also have specialized regulatory tools for compliance checklists and risk assessments!"
     
     else:
-        # Use regular RAG chain
+        # Use regular RAG chain with thinking context
         chain = ConversationalRetrievalChain.from_llm(
             ChatOpenAI(model="gpt-4", temperature=0, streaming=True),
             _retriever,
@@ -113,11 +145,19 @@ def call_rag_with_tools(state: MessagesState):
             verbose=False,
         )
         
+        # Include thinking context in the query
+        enhanced_prompt = f"""
+        My thinking process: {thinking}
+        
+        Question: {last_user_msg.content}
+        
+        Now provide the final answer following the Quantara style guide.
+        """
+        
         response = chain.invoke(
-            {"question": last_user_msg.content, "chat_history": []}
+            {"question": enhanced_prompt, "chat_history": []}
         )
         
-        # Build a markdown reply with unique citations
         answer = response["answer"]
         sources = response["source_documents"]
         unique_sources = {Path(doc.metadata.get('source', 'unknown')).name for doc in sources}
@@ -126,11 +166,18 @@ def call_rag_with_tools(state: MessagesState):
         for source in unique_sources:
             content += f"- {source}\n"
     
-    # Return back to the graph as an AI message
-    return {"messages": AIMessageChunk(content=content)}
+    # Store both thinking and final answer in state
+    state["final_answer"] = content
+    
+    # Also add the AI response to the messages for conversation history
+    state["messages"].append(AIMessage(content=content))
+    
+    return state
 
-workflow.add_edge(START, "rag_node")
-workflow.add_node("rag_node", call_rag_with_tools)
+workflow.add_edge(START, "thinking_node")
+workflow.add_edge("thinking_node", "rag_node")
+workflow.add_node("thinking_node", thinking_node)
+workflow.add_node("rag_node", call_rag_with_cot)
 
 # Memory (optional but kept from your original example)
 memory          = MemorySaver()
@@ -150,6 +197,18 @@ async def on_chat_start():
     chain = make_chain(k=6)
     cl.user_session.set("chain", chain)
     
+    # Add settings for Chain-of-Thought display
+    await cl.ChatSettings(
+        [
+            cl.input_widget.Select(
+                id="show_cot",
+                label="🧠 Chain-of-Thought Reasoning",
+                values=["off", "on"],
+                initial_index=0,
+            ),
+        ]
+    ).send()
+    
     welcome_message = """🚀 **Quantara-AI ready!** 
 
 I can help you with:
@@ -157,6 +216,9 @@ I can help you with:
 • **Document Search**: Search through regulatory docs, 10-K filings, research papers
 • **Stock Data**: Real-time stock prices and charts
 • **Regulatory Compliance**: Basel Framework, compliance checklists, risk assessments
+
+**🧠 Chain-of-Thought Feature:**
+Use the settings above to enable reasoning visibility for complex questions!
 
 **Available Tools:**
 """ + get_tool_info() + """
@@ -166,19 +228,74 @@ Ask me anything about finance, risk management, or regulatory compliance!"""
     await cl.Message(welcome_message).send()
 
 
+@cl.on_settings_update
+async def on_settings_update(settings):
+    """Handle settings updates for Chain-of-Thought display."""
+    cl.user_session.set("settings", settings)
+
 @cl.on_message
 async def main(message: cl.Message):
+    # Get user settings
+    settings = cl.user_session.get("settings", {})
+    show_cot = settings.get("show_cot", "off") == "on"
+    
+    # Create placeholder for final response
     placeholder = cl.Message(content="")
     await placeholder.send()
 
     cfg: RunnableConfig = {"configurable": {"thread_id": cl.context.session.thread_id}}
 
-    # Stream LangGraph output back to the UI
-    for chunk, _ in langgraph_app.stream(
-        {"messages": [HumanMessage(content=message.content)]},
+    # Initialize state with settings
+    initial_state = {
+        "messages": [HumanMessage(content=message.content)],
+        "show_thinking": show_cot,
+        "thinking": None
+    }
+
+    # Stream LangGraph output
+    final_state = None
+    for chunk in langgraph_app.stream(
+        initial_state,
         cfg,
-        stream_mode="messages",
+        stream_mode="values",
     ):
-        if isinstance(chunk, AIMessageChunk):
-            placeholder.content += chunk.content  # type: ignore
-            await placeholder.update()
+        final_state = chunk
+    
+    # Extract thinking and final answer from final state
+    thinking = final_state.get("thinking", "") if final_state else ""
+    messages = final_state.get("messages", []) if final_state else []
+    
+    # First try to get the final answer from the state
+    final_answer = final_state.get("final_answer", "") if final_state else ""
+    
+    # If no final_answer in state, look for the last AI message
+    if not final_answer and messages:
+        for msg in reversed(messages):
+            # Look specifically for AI messages (not HumanMessage)
+            if hasattr(msg, 'content') and isinstance(msg.content, str) and msg.content.strip():
+                # Check if this is not a HumanMessage (user message)
+                if not isinstance(msg, HumanMessage):
+                    final_answer = msg.content
+                    break
+    
+    # Fallback if still no answer
+    if not final_answer:
+        final_answer = "No response generated."
+    
+    # Prepare elements for display
+    elements = []
+    
+    # Add thinking as an accordion if enabled and available
+    if show_cot and thinking:
+        elements.append(
+            cl.Accordion(
+                content=thinking,
+                title="🧠 Chain-of-Thought Reasoning",
+                open=False  # Collapsed by default
+            )
+        )
+    
+    # Update the placeholder with final content and elements
+    placeholder.content = final_answer
+    placeholder.elements = elements
+    await placeholder.update()
