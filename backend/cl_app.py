@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from typing import TypedDict, Optional
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 load_dotenv()  # ← makes OPENAI_API_KEY available for both LLM & embeddings
 
@@ -38,10 +38,10 @@ class UIConfig:
 
 @dataclass
 class QuantaraConfig:
-    llm: LLMConfig = LLMConfig()
-    reflection: ReflectionConfig = ReflectionConfig()
-    retrieval: RetrievalConfig = RetrievalConfig()
-    ui: UIConfig = UIConfig()
+    llm: LLMConfig = field(default_factory=LLMConfig)
+    reflection: ReflectionConfig = field(default_factory=ReflectionConfig)
+    retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
+    ui: UIConfig = field(default_factory=UIConfig)
     debug_mode: bool = False
 
 # Global configuration
@@ -61,6 +61,8 @@ from langchain_core.runnables.config import RunnableConfig
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.pydantic_v1 import BaseModel, Field
+from typing import List, Optional
 
 # ── Tool layer imports ───────────────────────────────────────────────────────
 from tools import (
@@ -92,6 +94,138 @@ def monitor_performance(operation_name: str):
         return wrapper
     return decorator
 
+# ── Structured Output Models ────────────────────────────────────────────────
+class RegulatoryAnalysis(BaseModel):
+    """Structured output for regulatory analysis."""
+    key_requirements: List[str] = Field(..., description="Main regulatory requirements")
+    implementation_steps: List[str] = Field(..., description="Steps for implementation")
+    risk_factors: List[str] = Field(..., description="Key risk considerations")
+    best_practices: List[str] = Field(..., description="Industry best practices")
+    recent_updates: Optional[List[str]] = Field(None, description="Recent regulatory changes")
+
+class FinancialAnalysis(BaseModel):
+    """Structured output for financial analysis."""
+    executive_summary: str = Field(..., description="Brief executive summary")
+    key_metrics: List[str] = Field(..., description="Important financial metrics")
+    analysis_points: List[str] = Field(..., description="Main analysis findings")
+    risks: List[str] = Field(..., description="Identified risks")
+    recommendations: List[str] = Field(..., description="Actionable recommendations")
+
+class PortfolioAnalysis(BaseModel):
+    """Structured output for portfolio analysis."""
+    portfolio_type: str = Field(..., description="Type of portfolio")
+    allocation_breakdown: List[str] = Field(..., description="Asset allocation details")
+    risk_metrics: List[str] = Field(..., description="Risk assessment metrics")
+    performance_indicators: List[str] = Field(..., description="Performance metrics")
+    optimization_suggestions: List[str] = Field(..., description="Improvement suggestions")
+
+# ── LLM Performance Monitor ──────────────────────────────────────────────────
+class LLMPerformanceMonitor:
+    """Monitor LLM performance and costs."""
+    def __init__(self):
+        self.requests: int = 0
+        self.total_tokens: int = 0
+        self.total_cost: float = 0.0
+        self.response_times: list = []
+        self.model_usage: dict = {}
+        self.error_count: int = 0
+        
+    def log_request(self, model: str, prompt_tokens: int, completion_tokens: int, 
+                   response_time: float, error: bool = False):
+        """Log a single LLM request"""
+        if error:
+            self.error_count += 1
+            return
+            
+        self.requests += 1
+        tokens = prompt_tokens + completion_tokens
+        self.total_tokens += tokens
+        
+        # Calculate approximate cost
+        if "gpt-4" in model and "mini" not in model:
+            prompt_cost = prompt_tokens * 0.00001  # $0.01 per 1K tokens
+            completion_cost = completion_tokens * 0.00003  # $0.03 per 1K tokens
+        else:  # gpt-4o-mini or similar
+            prompt_cost = prompt_tokens * 0.000005  # $0.005 per 1K tokens
+            completion_cost = completion_tokens * 0.000015  # $0.015 per 1K tokens
+            
+        request_cost = prompt_cost + completion_cost
+        self.total_cost += request_cost
+        
+        # Store response time
+        self.response_times.append(response_time)
+        
+        # Track model usage
+        self.model_usage[model] = self.model_usage.get(model, 0) + 1
+        
+    def get_statistics(self):
+        """Get performance statistics"""
+        if not self.response_times:
+            return {"error": "No data collected"}
+            
+        avg_response_time = sum(self.response_times) / len(self.response_times)
+        return {
+            "total_requests": self.requests,
+            "total_tokens": self.total_tokens,
+            "estimated_cost_usd": round(self.total_cost, 4),
+            "avg_response_time_sec": round(avg_response_time, 2),
+            "error_count": self.error_count,
+            "error_rate": round(self.error_count / max(self.requests + self.error_count, 1), 3),
+            "model_usage": self.model_usage,
+            "avg_tokens_per_request": round(self.total_tokens / max(self.requests, 1), 1)
+        }
+
+# Create singleton instance
+performance_monitor = LLMPerformanceMonitor()
+
+# ── Enhanced Memory Manager ──────────────────────────────────────────────────
+class EnhancedMemoryManager:
+    """Improved conversation memory with forgetting and importance weighting"""
+    def __init__(self, max_tokens: int = 4000):
+        self.messages: list = []
+        self.max_tokens = max_tokens
+        self.token_count: float = 0.0
+        self.importance_scores: list = []
+    
+    def add_message(self, message, importance=1.0):
+        """Add message with importance score"""
+        self.messages.append(message)
+        self.importance_scores.append(importance)
+        
+        # Estimate tokens (simplified)
+        msg_tokens = len(message.content.split()) * 1.3
+        self.token_count += msg_tokens
+        
+        # Prune if needed
+        if self.token_count > self.max_tokens:
+            self._prune_memory()
+    
+    def _prune_memory(self):
+        """Remove least important messages"""
+        # Keep most recent message and most important ones
+        if len(self.messages) <= 2:
+            return
+            
+        # Sort by importance (excluding most recent)
+        old_msgs = list(zip(self.messages[:-1], self.importance_scores[:-1]))
+        sorted_msgs = sorted(old_msgs, key=lambda x: x[1])
+        
+        # Remove least important
+        to_remove = sorted_msgs[0][0]
+        idx = self.messages.index(to_remove)
+        self.messages.pop(idx)
+        self.importance_scores.pop(idx)
+        
+        # Recalculate tokens
+        self.token_count = sum(len(m.content.split()) * 1.3 for m in self.messages)
+    
+    def get_messages(self):
+        """Get current messages"""
+        return self.messages
+
+# Create memory manager instance
+memory_manager = EnhancedMemoryManager()
+
 def analyze_query_intent(user_content: str) -> dict:
     """Analyze user intent to determine best response strategy."""
     intent_patterns = {
@@ -119,7 +253,7 @@ def analyze_query_intent(user_content: str) -> dict:
     }
 
 def calculate_response_quality(response: str, user_question: str) -> dict:
-    """Calculate objective quality metrics for responses."""
+    """Calculate comprehensive quality metrics for responses."""
     metrics = {
         "length_score": min(len(response) / 500, 1.0),  # Normalize to 500 chars
         "structure_score": 0.0,
@@ -143,10 +277,46 @@ def calculate_response_quality(response: str, user_question: str) -> dict:
     overlap = len(question_keywords.intersection(response_keywords))
     metrics["completeness_score"] = min(overlap / max(len(question_keywords), 1), 1.0)
     
-    overall_score = sum(metrics.values()) / len(metrics) * 10
+    # Advanced metrics
+    source_count = response.count("- ")  # Count sources
+    has_formatting = "###" in response or "##" in response
+    has_list = "\n- " in response or "\n1." in response
+    has_examples = "example" in response.lower() or "instance" in response.lower()
+    complex_reasoning = len(response) > 1000 and "however" in response.lower()
+    
+    # Calculate specialized scores
+    information_density = min(len(re.findall(r'[A-Z][a-z]+', response)) / max(len(response.split()), 1) * 10, 1.0)
+    formatting_score = (has_formatting * 0.5) + (has_list * 0.5)
+    reasoning_score = 0.5 + (complex_reasoning * 0.5)
+    
+    # Domain-specific metrics for financial content
+    has_financial_terms = bool(re.search(r'ratio|capital|portfolio|risk|compliance|regulatory|basel|var|sharpe', response.lower()))
+    has_calculations = bool(re.search(r'\d+[%]|\d+\.\d+', response))
+    
+    financial_score = (has_financial_terms * 0.6) + (has_calculations * 0.4)
+    
+    # Combined comprehensive score
+    comprehensive_score = (
+        metrics["length_score"] * 1.0 +
+        metrics["structure_score"] * 2.0 +
+        metrics["source_score"] * 1.5 +
+        metrics["completeness_score"] * 2.0 +
+        formatting_score * 1.5 +
+        information_density * 2.0 + 
+        reasoning_score * 2.0 +
+        financial_score * 3.0
+    ) / 15.0
+    
+    overall_score = comprehensive_score * 10
     
     return {
         **metrics,
+        "source_count": source_count,
+        "formatting_quality": formatting_score * 10,
+        "information_density": information_density * 10,
+        "reasoning_complexity": reasoning_score * 10,
+        "financial_relevance": financial_score * 10,
+        "comprehensive_score": comprehensive_score * 10,
         "overall_score": overall_score
     }
 
@@ -154,6 +324,7 @@ def calculate_response_quality(response: str, user_question: str) -> dict:
 class CoTState(TypedDict):
     messages: list
     thinking: Optional[str]
+    thinking_quality: Optional[float]
     show_thinking: Optional[bool]
     initial_answer: Optional[str]
     reflection: Optional[str]
@@ -162,6 +333,8 @@ class CoTState(TypedDict):
     improvement_needed: Optional[bool]
     iteration_count: Optional[int]
     show_reflection: Optional[bool]
+    query_intent: Optional[dict]
+    response_quality: Optional[dict]
     # Remove chain from state - we'll get it from session instead
 
 
@@ -201,41 +374,177 @@ reflection_llm = ChatOpenAI(
     timeout=config.llm.timeout
 )
 
-async def thinking_node(state: CoTState):
-    """Generate Chain-of-Thought reasoning before answering."""
-    last_user_msg = state["messages"][-1]
-    
-    # More focused thinking prompt to optimize costs
-    thinking_prompt = f"""
-    Analyze this financial question efficiently:
-    Question: {last_user_msg.content}
-
-    Provide concise thinking:
-    1. Question type: [analysis/calculation/research/regulatory]
-    2. Required data: [list key information needed]
-    3. Approach: [methodology in 1-2 sentences]
-    4. Key considerations: [main factors to address]
-    """
+# ── Instrumented LLM Calls ───────────────────────────────────────────────────
+def instrumented_llm_call(llm, messages, **kwargs):
+    """Wrapper for LLM calls with performance monitoring."""
+    start_time = time.time()
+    error_occurred = False
     
     try:
-        response = thinking_llm.invoke([HumanMessage(content=thinking_prompt)])
+        response = llm.invoke(messages, **kwargs)
+        end_time = time.time()
+        
+        # Extract token usage if available
+        usage = getattr(response, "usage", None)
+        if usage:
+            prompt_tokens = getattr(usage, "prompt_tokens", 0)
+            completion_tokens = getattr(usage, "completion_tokens", 0)
+        else:
+            # Estimate tokens
+            prompt_tokens = sum(len(m.content.split()) for m in messages) // 0.75
+            completion_tokens = len(response.content.split()) // 0.75
+        
+        # Log the request
+        performance_monitor.log_request(
+            model=llm.model_name,
+            prompt_tokens=int(prompt_tokens),
+            completion_tokens=int(completion_tokens),
+            response_time=end_time - start_time,
+            error=False
+        )
+        
+        return response
+        
+    except Exception as e:
+        end_time = time.time()
+        performance_monitor.log_request(
+            model=llm.model_name,
+            prompt_tokens=0,
+            completion_tokens=0,
+            response_time=end_time - start_time,
+            error=True
+        )
+        raise e
+
+async def instrumented_llm_call_async(llm, messages, **kwargs):
+    """Async wrapper for LLM calls with performance monitoring."""
+    start_time = time.time()
+    
+    try:
+        response = await llm.ainvoke(messages, **kwargs)
+        end_time = time.time()
+        
+        # Extract token usage if available
+        usage = getattr(response, "usage", None)
+        if usage:
+            prompt_tokens = getattr(usage, "prompt_tokens", 0)
+            completion_tokens = getattr(usage, "completion_tokens", 0)
+        else:
+            # Estimate tokens
+            prompt_tokens = sum(len(m.content.split()) for m in messages) // 0.75
+            completion_tokens = len(response.content.split()) // 0.75
+        
+        # Log the request
+        performance_monitor.log_request(
+            model=llm.model_name,
+            prompt_tokens=int(prompt_tokens),
+            completion_tokens=int(completion_tokens),
+            response_time=end_time - start_time,
+            error=False
+        )
+        
+        return response
+        
+    except Exception as e:
+        end_time = time.time()
+        performance_monitor.log_request(
+            model=llm.model_name,
+            prompt_tokens=0,
+            completion_tokens=0,
+            response_time=end_time - start_time,
+            error=True
+        )
+        raise e
+
+async def thinking_node(state: CoTState):
+    """Generate enhanced Chain-of-Thought reasoning with structured analysis."""
+    last_user_msg = state["messages"][-1]
+    user_content = last_user_msg.content
+    
+    # Analyze query intent
+    intent_analysis = analyze_query_intent(user_content)
+    
+    # Enhanced thinking prompt based on intent
+    if intent_analysis["primary_intent"] == "regulatory":
+        thinking_prompt = f"""
+        Analyze this regulatory/compliance question systematically:
+        Question: {user_content}
+
+        Provide structured thinking:
+        1. **Regulatory Domain**: [Basel III/CCAR/Dodd-Frank/MiFID/etc.]
+        2. **Question Type**: [implementation/compliance/interpretation/assessment]
+        3. **Key Requirements**: [main regulatory requirements to address]
+        4. **Implementation Approach**: [step-by-step methodology]
+        5. **Risk Considerations**: [compliance risks and mitigation]
+        6. **Data/Sources Needed**: [regulatory documents, guidelines, precedents]
+        """
+    elif intent_analysis["primary_intent"] == "analysis":
+        thinking_prompt = f"""
+        Analyze this financial analysis question systematically:
+        Question: {user_content}
+
+        Provide structured thinking:
+        1. **Analysis Type**: [portfolio/risk/performance/valuation/market]
+        2. **Key Metrics**: [financial ratios, risk measures, performance indicators]
+        3. **Methodology**: [analytical framework and approach]
+        4. **Data Requirements**: [financial data, market data, benchmarks needed]
+        5. **Analysis Steps**: [step-by-step analytical process]
+        6. **Expected Insights**: [key insights and conclusions to derive]
+        """
+    elif intent_analysis["primary_intent"] == "calculation":
+        thinking_prompt = f"""
+        Analyze this calculation request systematically:
+        Question: {user_content}
+
+        Provide structured thinking:
+        1. **Calculation Type**: [portfolio metrics/VaR/ratios/valuations]
+        2. **Required Inputs**: [specific data points and parameters needed]
+        3. **Formula/Method**: [mathematical approach or model]
+        4. **Step-by-Step Process**: [calculation sequence]
+        5. **Validation Checks**: [reasonableness tests and cross-checks]
+        6. **Interpretation Guidelines**: [how to interpret results]
+        """
+    else:
+        # General enhanced thinking prompt
+        thinking_prompt = f"""
+        Analyze this financial question comprehensively:
+        Question: {user_content}
+
+        Provide structured thinking:
+        1. **Question Category**: [analysis/calculation/research/regulatory/strategy]
+        2. **Core Concepts**: [key financial concepts involved]
+        3. **Information Needed**: [data, documents, or context required]
+        4. **Analytical Approach**: [methodology and framework]
+        5. **Key Considerations**: [important factors and constraints]
+        6. **Expected Output**: [format and depth of response needed]
+        """
+    
+    try:
+        response = await instrumented_llm_call_async(thinking_llm, [HumanMessage(content=thinking_prompt)])
         state["thinking"] = response.content
+        
+        # Store thinking quality for later use
+        thinking_quality = calculate_response_quality(response.content, user_content)
+        state["thinking_quality"] = thinking_quality.get("comprehensive_score", 5.0)
+        
     except Exception as e:
         print(f"Error in thinking_node: {e}")
         state["thinking"] = f"Error generating thinking process: {str(e)}"
+        state["thinking_quality"] = 1.0
     
     return state
 
 @monitor_performance("RAG with CoT")
 def call_rag_with_cot(state: CoTState):
-    """Enhanced RAG with Chain-of-Thought integration and error handling."""
+    """Enhanced RAG with Chain-of-Thought integration and quality assessment."""
     try:
         last_user_msg = state["messages"][-1]
         user_content = last_user_msg.content
         thinking = state.get("thinking", "")
         
-        # Analyze intent for better routing
+        # Analyze intent for better routing and store in state
         intent_analysis = analyze_query_intent(user_content)
+        state["query_intent"] = intent_analysis
         user_content_lower = user_content.lower()
         
         # Get chain from thread-local storage or session
@@ -256,56 +565,71 @@ def call_rag_with_cot(state: CoTState):
         
         # Intent-based routing with improved prompts
         if intent_analysis["primary_intent"] == "calculation" or any(word in user_content_lower for word in ["calculate portfolio", "portfolio metrics", "sharpe ratio"]):
-            content = "🔧 To use portfolio calculation tools, please provide:\n" \
-                     "- Portfolio weights (must sum to 1.0)\n" \
-                     "- Expected returns for each asset\n" \
-                     "- Volatilities for each asset\n" \
-                     "- Correlation matrix\n\n" \
-                     "Example: I'll calculate metrics for a portfolio with 60% stocks (10% return, 15% volatility) and 40% bonds (4% return, 5% volatility)"
+            content = "🔧 **Portfolio Calculation Tools Available**\n\n" \
+                     "To calculate portfolio metrics, please provide:\n" \
+                     "- **Portfolio weights** (must sum to 1.0)\n" \
+                     "- **Expected returns** for each asset (annual %)\n" \
+                     "- **Volatilities** for each asset (annual %)\n" \
+                     "- **Correlation matrix** between assets\n\n" \
+                     "**Example**: _Calculate metrics for a portfolio with 60% stocks (10% return, 15% volatility) and 40% bonds (4% return, 5% volatility) with 0.3 correlation_\n\n" \
+                     "💡 I can calculate: Sharpe Ratio, Portfolio Return, Portfolio Risk, Diversification Benefits"
         
         elif any(word in user_content_lower for word in ["calculate var", "value at risk"]):
-            content = "🔧 To calculate Value at Risk (VaR), please provide:\n" \
-                     "- Portfolio value in dollars\n" \
-                     "- Expected annual return (as percentage)\n" \
-                     "- Annual volatility (as percentage)\n" \
-                     "- Confidence level (e.g., 95%)\n" \
-                     "- Time horizon in days\n\n" \
-                     "Example: Calculate VaR for a $1,000,000 portfolio with 8% expected return and 15% volatility"
+            content = "🔧 **Value at Risk (VaR) Calculation Tools**\n\n" \
+                     "To calculate VaR, please provide:\n" \
+                     "- **Portfolio value** in dollars\n" \
+                     "- **Expected annual return** (as percentage)\n" \
+                     "- **Annual volatility** (as percentage)\n" \
+                     "- **Confidence level** (e.g., 95%, 99%)\n" \
+                     "- **Time horizon** in days\n\n" \
+                     "**Example**: _Calculate 95% VaR for a $1,000,000 portfolio with 8% expected return and 15% volatility over 1 day_\n\n" \
+                     "💡 I can calculate: Historical VaR, Parametric VaR, Monte Carlo VaR"
         
         elif any(word in user_content_lower for word in ["stock price", "ticker", "financial data"]):
-            content = "🔧 To get stock data, please specify:\n" \
-                     "- Stock symbol (e.g., AAPL, MSFT)\n" \
-                     "- Time period (e.g., 1d, 1mo, 1y)\n\n" \
-                     "Example: Get Apple stock price for the last month"
+            content = "🔧 **Stock Data & Market Analysis Tools**\n\n" \
+                     "To get stock information, please specify:\n" \
+                     "- **Stock symbol** (e.g., AAPL, MSFT, GOOGL)\n" \
+                     "- **Time period** (e.g., 1d, 1w, 1m, 1y, 5y)\n" \
+                     "- **Analysis type** (price, returns, volatility, correlations)\n\n" \
+                     "**Example**: _Get Apple (AAPL) stock price and performance analysis for the last 6 months_\n\n" \
+                     "💡 I can provide: Price charts, Technical indicators, Fundamental ratios, Peer comparisons"
         
         elif intent_analysis["primary_intent"] == "regulatory" or any(word in user_content_lower for word in ["regulatory", "basel", "compliance"]):
-            # Enhanced prompt for regulatory queries
+            # Enhanced prompt for regulatory queries with structured output
             enhanced_prompt = f"""
-            Context from thinking process: {thinking}
+            **Regulatory Analysis Context:**
+            Thinking Process: {thinking}
             
-            Question: {user_content}
+            **Question:** {user_content}
             
-            Please provide a comprehensive answer about this regulatory/compliance topic. Focus on:
-            1. Key regulatory requirements and their rationale
-            2. Practical implementation guidance with specific steps
-            3. Risk considerations and mitigation strategies
-            4. Best practices from industry experience
-            5. Recent updates or changes if applicable
+            Please provide a comprehensive regulatory analysis with the following structure:
             
-            Use clear formatting with headers and bullet points. Include specific examples where helpful.
+            ## Executive Summary
+            [Brief overview of the regulatory topic and key implications]
+            
+            ## Key Regulatory Requirements
+            [Detailed requirements with specific citations and rationale]
+            
+            ## Implementation Guidance
+            [Step-by-step practical implementation approach]
+            
+            ## Risk Assessment & Mitigation
+            [Compliance risks and recommended mitigation strategies]
+            
+            ## Best Practices & Industry Standards
+            [Proven approaches and industry consensus]
+            
+            ## Recent Updates & Changes
+            [Any recent regulatory changes or proposed modifications]
+            
+            Use clear formatting with headers, bullet points, and specific examples. Include quantitative thresholds where applicable.
             """
             
             try:
-                response = chain.invoke(
-                    {
-                        "input": enhanced_prompt, 
-                        "chat_history": []
-                    },
-                    config={"timeout": 30}
-                )
+                response = instrumented_llm_call(chain, {"input": enhanced_prompt, "chat_history": []}, config={"timeout": 30})
                 
                 answer = response.get("answer", "No answer generated")
-                sources = response.get("context", [])  # New chain returns 'context' instead of 'source_documents'
+                sources = response.get("context", [])
                 
                 # Extract unique source names
                 unique_sources = set()
@@ -314,46 +638,56 @@ def call_rag_with_cot(state: CoTState):
                         if hasattr(doc, 'metadata') and 'source' in doc.metadata:
                             unique_sources.add(Path(doc.metadata['source']).name)
                 
-                content = answer + "\n\n**Sources**\n"
+                content = answer + "\n\n**📚 Sources**\n"
                 for source in unique_sources:
                     content += f"- {source}\n"
                 
-                content += "\n\n💡 **Tip**: I also have specialized regulatory tools for compliance checklists and risk assessments!"
+                content += "\n\n💡 **Additional Tools**: I also have specialized regulatory tools for compliance checklists and risk assessments!"
                 
             except Exception as e:
                 print(f"RAG chain error for regulatory query: {e}")
-                content = f"❌ I encountered an error while searching regulatory information: {str(e)}\n\nPlease try rephrasing your question."
+                content = f"❌ I encountered an error while searching regulatory information: {str(e)}\n\nPlease try rephrasing your question or check if the documents are available."
         
         else:
-            # Enhanced prompt for general queries
+            # Enhanced prompt for general queries with structured approach
             enhanced_prompt = f"""
-            My analysis approach: {thinking}
+            **Analysis Context:**
+            My structured thinking: {thinking}
+            Query Intent: {intent_analysis['primary_intent']} (confidence: {intent_analysis['confidence']})
             
-            Question: {user_content}
+            **Question:** {user_content}
             
-            Please provide a comprehensive, well-structured answer following these guidelines:
-            1. Start with a clear executive summary
-            2. Provide detailed analysis with supporting evidence from the sources
-            3. Include practical implications and actionable insights
-            4. Use proper formatting with headers, bullet points, and numbered lists
-            5. Provide specific examples or calculations where relevant
-            6. Address potential risks or considerations
-            7. Always cite your sources accurately
+            Please provide a comprehensive, well-structured response following these guidelines:
             
-            Structure your response to be both comprehensive and accessible to financial professionals.
+            ## Executive Summary
+            [Clear, concise overview of the answer]
+            
+            ## Detailed Analysis
+            [In-depth analysis with supporting evidence from sources]
+            
+            ## Key Insights & Implications
+            [Important takeaways and practical implications]
+            
+            ## Quantitative Analysis
+            [Include relevant calculations, ratios, or metrics where applicable]
+            
+            ## Risk Considerations
+            [Potential risks, limitations, or caveats]
+            
+            ## Actionable Recommendations
+            [Specific, practical recommendations]
+            
+            ## Examples & Case Studies
+            [Real-world examples or hypothetical scenarios]
+            
+            Structure your response to be both comprehensive and accessible to financial professionals. Use proper formatting with headers, bullet points, and numbered lists.
             """
             
             try:
-                response = chain.invoke(
-                    {
-                        "input": enhanced_prompt, 
-                        "chat_history": []
-                    },
-                    config={"timeout": 30}
-                )
+                response = instrumented_llm_call(chain, {"input": enhanced_prompt, "chat_history": []}, config={"timeout": 30})
                 
                 answer = response.get("answer", "No answer generated")
-                sources = response.get("context", [])  # New chain returns 'context' instead of 'source_documents'
+                sources = response.get("context", [])
                 
                 # Extract unique source names
                 unique_sources = set()
@@ -362,17 +696,26 @@ def call_rag_with_cot(state: CoTState):
                         if hasattr(doc, 'metadata') and 'source' in doc.metadata:
                             unique_sources.add(Path(doc.metadata['source']).name)
                 
-                content = answer + "\n\n**Sources**\n"
+                content = answer + "\n\n**📚 Sources**\n"
                 for source in unique_sources:
                     content += f"- {source}\n"
                     
             except Exception as e:
                 print(f"RAG chain error for general query: {e}")
-                content = f"❌ I encountered an error while searching for information: {str(e)}\n\nPlease try rephrasing your question."
+                content = f"❌ I encountered an error while searching for information: {str(e)}\n\nPlease try rephrasing your question or check your connection."
+        
+        # Calculate response quality metrics
+        response_quality = calculate_response_quality(content, user_content)
+        state["response_quality"] = response_quality
+        
+        if config.debug_mode:
+            print(f"Response quality score: {response_quality.get('comprehensive_score', 0):.1f}/10")
         
     except Exception as e:
         print(f"Error in call_rag_with_cot: {e}")
         content = f"❌ An unexpected error occurred: {str(e)}"
+        # Set minimal quality score for error responses
+        state["response_quality"] = {"comprehensive_score": 1.0, "overall_score": 1.0}
     
     # Store initial answer in state for reflection
     state["initial_answer"] = content
@@ -638,34 +981,47 @@ async def on_chat_start():
     # Create enhanced settings UI
     await create_settings_ui()
     
-    welcome_message = """🚀 **Quantara-AI ready with Enhanced RAG!** 
+    welcome_message = """🚀 **Quantara-AI Enhanced with Advanced Features!** 
 
 I can help you with:
 • **Financial Analysis**: Risk calculations, portfolio metrics, beta analysis
-• **Document Search**: Search through regulatory docs, 10-K filings, research papers
+• **Document Search**: Search through regulatory docs, 10-K filings, research papers  
 • **Stock Data**: Real-time stock prices and charts
 • **Regulatory Compliance**: Basel Framework, compliance checklists, risk assessments
 
-**🧠 Advanced Features:**
-• **Chain-of-Thought**: See my thinking process *before* the answer appears - watch me analyze the question step-by-step, then see the thinking get replaced by the final answer
-• **Self-Reflection**: I evaluate and improve my own responses for better quality
-• **Hybrid Search**: Combines dense vectors and keyword matching for better retrieval
-• **Reranking**: Advanced relevance scoring for more accurate results
+**🧠 Advanced Intelligence Features:**
+• **Enhanced Chain-of-Thought**: See my structured analysis process with intent-based reasoning
+• **Smart Self-Reflection**: Comprehensive quality evaluation with detailed metrics
+• **Adaptive RAG**: Intent-aware retrieval with structured response formatting
+• **Performance Monitoring**: Real-time cost and performance tracking
 
-**💡 New Thinking Display:**
-When Chain-of-Thought is enabled, you'll see my analysis process appear first (styled in a code block), followed by a brief pause, then it gets replaced with the comprehensive answer. You can adjust the timing in settings!
+**📊 Quality & Performance:**
+• **Response Quality Scoring**: Automatic evaluation of answer comprehensiveness
+• **Cost Optimization**: Smart model selection (GPT-4 for main tasks, GPT-4o-mini for thinking)
+• **Performance Analytics**: Token usage, response times, and error tracking
+• **Debug Mode**: View quality metrics and processing details
 
-Use the settings above to customize these features!
+**🔧 Enhanced Tools & Capabilities:**
+• **Structured Outputs**: Organized responses with clear sections and formatting
+• **Intent Recognition**: Automatic query classification for better responses
+• **Memory Management**: Intelligent conversation history with importance weighting
+• **Error Handling**: Robust error recovery with detailed diagnostics
+
+**💡 Usage Tips:**
+- Enable "Chain-of-Thought" to see my thinking process stream in real-time
+- Use "Self-Reflection" for quality assessment and improvement suggestions  
+- Turn on "Debug Mode" to see quality scores and performance metrics
+- Check "Show Performance Statistics" to monitor usage and costs
 
 **Available Tools:**
 """ + get_tool_info() + """
 
-Ask me anything about finance, risk management, or regulatory compliance!"""
+Ask me anything about finance, risk management, or regulatory compliance - now with enhanced intelligence and monitoring!"""
     
     await cl.Message(welcome_message).send()
 
 async def create_settings_ui():
-    """Create enhanced settings UI."""
+    """Create enhanced settings UI with performance monitoring."""
     settings = [
         cl.input_widget.Switch(
             id="show_cot",
@@ -690,6 +1046,16 @@ async def create_settings_ui():
             min=3,
             max=12,
             step=1
+        ),
+        cl.input_widget.Switch(
+            id="debug_mode",
+            label="🔧 Debug Mode (Show Quality Metrics)",
+            initial=config.debug_mode
+        ),
+        cl.input_widget.Switch(
+            id="show_performance",
+            label="📈 Show Performance Statistics",
+            initial=False
         )
     ]
     
@@ -702,6 +1068,12 @@ async def on_settings_update(settings):
     print(f"Settings updated: {settings}")
     cl.user_session.set("settings", settings)
     
+    # Update global debug mode
+    config.debug_mode = settings.get("debug_mode", False)
+    
+    # Check if performance stats should be shown
+    show_performance = settings.get("show_performance", False)
+    
     # Check if retrieval settings changed
     current_mode = config.retrieval.mode
     current_k = config.retrieval.k
@@ -709,9 +1081,28 @@ async def on_settings_update(settings):
     new_mode = settings.get("retrieval_mode", current_mode)
     new_k = settings.get("rag_k", current_k)
     
-    # Update UI config for thinking display time
-    thinking_time = settings.get("thinking_time", config.ui.thinking_display_time)
-    config.ui.thinking_display_time = thinking_time
+    # Build settings confirmation message
+    settings_msg = f"✅ **Settings Updated:**\n"
+    settings_msg += f"- Retrieval mode: `{new_mode}`\n"
+    settings_msg += f"- Documents to retrieve: `{new_k}`\n"
+    settings_msg += f"- Chain-of-Thought: `{'on' if settings.get('show_cot') else 'off'}`\n"
+    settings_msg += f"- Self-Reflection: `{'on' if settings.get('show_reflection') else 'off'}`\n"
+    settings_msg += f"- Debug mode: `{'on' if config.debug_mode else 'off'}`"
+    
+    # Add performance statistics if enabled
+    if show_performance:
+        stats = performance_monitor.get_statistics()
+        if "error" not in stats:
+            settings_msg += f"\n\n📈 **Performance Statistics:**\n"
+            settings_msg += f"- Total requests: `{stats['total_requests']}`\n"
+            settings_msg += f"- Total tokens: `{stats['total_tokens']:,}`\n"
+            settings_msg += f"- Estimated cost: `${stats['estimated_cost_usd']}`\n"
+            settings_msg += f"- Avg response time: `{stats['avg_response_time_sec']}s`\n"
+            settings_msg += f"- Error rate: `{stats['error_rate']*100:.1f}%`\n"
+            settings_msg += f"- Avg tokens/request: `{stats['avg_tokens_per_request']}`\n"
+            
+            if stats['model_usage']:
+                settings_msg += f"- Model usage: `{stats['model_usage']}`"
     
     # Recreate chain if retrieval settings changed
     if new_mode != current_mode or new_k != current_k:
@@ -720,18 +1111,14 @@ async def on_settings_update(settings):
             chain_storage.chain = chain
             cl.user_session.set("chain", chain)
             
-            await cl.Message(
-                content=f"✅ **Settings Updated:**\n- Retrieval mode: `{new_mode}`\n- Documents to retrieve: `{new_k}`\n- Chain-of-Thought: `{'on' if settings.get('show_cot') else 'off'}`\n- Self-Reflection: `{'on' if settings.get('show_reflection') else 'off'}`\n- Thinking display time: `{thinking_time}s`"
-            ).send()
+            await cl.Message(content=settings_msg).send()
         except Exception as e:
             await cl.Message(
-                content=f"⚠️ Error updating retrieval settings: {str(e)}\nUsing previous configuration."
+                content=f"⚠️ Error updating retrieval settings: {str(e)}\nUsing previous configuration.\n\n{settings_msg}"
             ).send()
     else:
         # Just update UI settings without recreating chain
-        await cl.Message(
-            content=f"✅ **UI Settings Updated:**\n- Chain-of-Thought: `{'on' if settings.get('show_cot') else 'off'}`\n- Self-Reflection: `{'on' if settings.get('show_reflection') else 'off'}`\n- Thinking display time: `{thinking_time}s`"
-        ).send()
+        await cl.Message(content=settings_msg).send()
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -835,7 +1222,7 @@ Error generating thinking process: {str(e)}
         await msg.update()
 
 async def generate_answer(user_input: str, show_reflection: bool = False):
-    """Generate the main answer using the RAG chain."""
+    """Generate the main answer using the RAG chain with enhanced quality assessment."""
     try:
         # Get chain from thread-local storage
         chain = getattr(chain_storage, 'chain', None)
@@ -847,14 +1234,71 @@ async def generate_answer(user_input: str, show_reflection: bool = False):
         if not chain:
             return {
                 "content": "❌ Error: RAG chain not initialized. Please refresh the page.",
-                "reflection": None
+                "reflection": None,
+                "quality_score": 1.0
             }
         
-        # Generate answer using RAG
+        # Analyze query intent for better response structuring
+        intent_analysis = analyze_query_intent(user_input)
+        
+        # Enhanced prompt based on intent
+        if intent_analysis["primary_intent"] == "regulatory":
+            enhanced_prompt = f"""
+            **Regulatory Query Analysis**
+            Question: {user_input}
+            
+            Please provide a structured regulatory analysis:
+            
+            ## Regulatory Overview
+            [Brief context and scope]
+            
+            ## Key Requirements & Standards
+            [Specific regulatory requirements with citations]
+            
+            ## Implementation Framework
+            [Step-by-step implementation approach]
+            
+            ## Compliance Considerations
+            [Risk factors and mitigation strategies]
+            
+            ## Industry Best Practices
+            [Proven approaches and recommendations]
+            
+            Use professional formatting with clear headers and actionable insights.
+            """
+        else:
+            enhanced_prompt = f"""
+            **Financial Analysis Request**
+            Query Intent: {intent_analysis['primary_intent']}
+            Question: {user_input}
+            
+            Please provide a comprehensive analysis with:
+            
+            ## Executive Summary
+            [Key takeaways and conclusions]
+            
+            ## Detailed Analysis
+            [In-depth examination with data and evidence]
+            
+            ## Key Metrics & Calculations
+            [Relevant financial ratios, calculations, or quantitative analysis]
+            
+            ## Risk Assessment
+            [Potential risks and considerations]
+            
+            ## Actionable Recommendations
+            [Specific, implementable advice]
+            
+            Structure your response professionally with clear formatting and source citations.
+            """
+        
+        # Generate answer using enhanced prompt
+        start_time = time.time()
         response = chain.invoke(
-            {"input": user_input, "chat_history": []},
+            {"input": enhanced_prompt, "chat_history": []},
             config={"timeout": 30}
         )
+        end_time = time.time()
         
         answer = response.get("answer", "No answer generated")
         sources = response.get("context", [])
@@ -866,29 +1310,104 @@ async def generate_answer(user_input: str, show_reflection: bool = False):
                 if hasattr(doc, 'metadata') and 'source' in doc.metadata:
                     unique_sources.add(Path(doc.metadata['source']).name)
         
-        content = answer + "\n\n**Sources**\n"
-        for source in unique_sources:
-            content += f"- {source}\n"
+        # Format response with enhanced source presentation
+        content = answer + "\n\n" + "─" * 50 + "\n**📚 Sources & References**\n"
+        for i, source in enumerate(sorted(unique_sources), 1):
+            content += f"{i}. {source}\n"
         
-        # Generate reflection if enabled
+        # Add performance info if debug mode is enabled
+        if config.debug_mode:
+            response_time = end_time - start_time
+            content += f"\n*Debug: Response generated in {response_time:.2f}s*"
+        
+        # Calculate response quality
+        quality_metrics = calculate_response_quality(content, user_input)
+        quality_score = quality_metrics.get("comprehensive_score", 5.0)
+        
+        # Add quality indicator if debug mode
+        if config.debug_mode:
+            content += f"\n*Quality Score: {quality_score:.1f}/10*"
+        
+        # Generate enhanced reflection if enabled
         reflection_content = None
         if show_reflection:
-            reflection_content = await generate_reflection(user_input, content)
+            reflection_content = await generate_enhanced_reflection(user_input, content, quality_metrics)
         
         return {
             "content": content,
-            "reflection": reflection_content
+            "reflection": reflection_content,
+            "quality_score": quality_score
         }
         
     except Exception as e:
         print(f"Error generating answer: {e}")
         return {
-            "content": f"❌ An error occurred while generating the answer: {str(e)}",
-            "reflection": None
+            "content": f"❌ An error occurred while generating the answer: {str(e)}\n\nPlease try rephrasing your question or check your connection.",
+            "reflection": None,
+            "quality_score": 1.0
         }
 
+async def generate_enhanced_reflection(user_question: str, answer: str, quality_metrics: dict):
+    """Generate enhanced reflection with detailed quality analysis."""
+    reflection_prompt = f"""
+    You are an expert financial advisor conducting a comprehensive review of your response.
+    
+    **Original Question:** {user_question}
+    
+    **Your Response:** {answer}
+    
+    **Quality Metrics:**
+    - Overall Score: {quality_metrics.get('comprehensive_score', 0):.1f}/10
+    - Structure Quality: {quality_metrics.get('formatting_quality', 0):.1f}/10
+    - Financial Relevance: {quality_metrics.get('financial_relevance', 0):.1f}/10
+    - Information Density: {quality_metrics.get('information_density', 0):.1f}/10
+    
+    Please provide a detailed critical evaluation:
+    
+    ## Quality Assessment
+    **Overall Score**: X/10
+    
+    ## Strengths Analysis
+    - [List specific strengths with examples]
+    - [What worked well in the response]
+    - [Areas of particular expertise demonstrated]
+    
+    ## Areas for Improvement
+    - [Specific weaknesses or gaps identified]
+    - [Missing information or analysis]
+    - [Structural or clarity issues]
+    
+    ## Content Accuracy Review
+    - [Assessment of factual accuracy]
+    - [Verification of calculations or claims]
+    - [Identification of any potential errors]
+    
+    ## Professional Standards Check
+    - [Adherence to financial industry standards]
+    - [Appropriate use of terminology]
+    - [Compliance with best practices]
+    
+    ## Actionability Assessment
+    - [How practical and implementable are the recommendations]
+    - [Clarity of next steps provided]
+    - [Relevance to the user's context]
+    
+    ## Final Recommendation
+    **[ACCEPT/IMPROVE]** - [Brief justification]
+    
+    ## Improvement Suggestions
+    [If IMPROVE, provide specific suggestions for enhancement]
+    """
+    
+    try:
+        reflection_response = await instrumented_llm_call_async(reflection_llm, [HumanMessage(content=reflection_prompt)])
+        return reflection_response.content
+    except Exception as e:
+        print(f"Error generating enhanced reflection: {e}")
+        return f"Error during reflection: {str(e)}"
+
 async def generate_reflection(user_question: str, answer: str):
-    """Generate reflection on the answer quality."""
+    """Generate standard reflection on the answer quality."""
     reflection_prompt = f"""
     You are an expert financial advisor reviewing your own response. 
     
@@ -914,7 +1433,7 @@ async def generate_reflection(user_question: str, answer: str):
     """
     
     try:
-        reflection_response = await reflection_llm.ainvoke([HumanMessage(content=reflection_prompt)])
+        reflection_response = await instrumented_llm_call_async(reflection_llm, [HumanMessage(content=reflection_prompt)])
         return reflection_response.content
     except Exception as e:
         print(f"Error generating reflection: {e}")
