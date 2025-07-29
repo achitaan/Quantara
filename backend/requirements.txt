@@ -28,6 +28,10 @@ scipy>=1.10.0
 requests==2.31.0
 aiofiles==23.2.1
 aiohttp==3.9.3
+
+# PostgreSQL support for caching
+psycopg2-binary==2.9.7
+sqlalchemy==2.0.23
 aiohttp-retry==2.8.3
 async-timeout==4.0.3
 

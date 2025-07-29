@@ -3,7 +3,19 @@ from dotenv import load_dotenv
 from pathlib import Path
 from typing import TypedDict, Optional
 import re
+import time
+import json
+import hashlib
+import pickle
+import sqlite3
+from datetime import datetime, timedelta
 from dataclasses import dataclass, field
+
+# PostgreSQL imports
+import psycopg2
+from psycopg2 import sql
+from psycopg2.pool import ThreadedConnectionPool
+from contextlib import contextmanager
 
 load_dotenv()  # ← makes OPENAI_API_KEY available for both LLM & embeddings
 
@@ -37,11 +49,38 @@ class UIConfig:
     show_thinking_before_answer: bool = True
 
 @dataclass
+class CacheConfig:
+    enable_response_cache: bool = True
+    enable_embedding_cache: bool = True
+    enable_retrieval_cache: bool = True
+    enable_thinking_cache: bool = False  # Optional for thinking processes
+    cache_ttl_hours: int = 24  # Time to live
+    max_cache_size_mb: int = 100  # Maximum cache size
+    
+    # Database configuration
+    use_postgresql: bool = True  # Use PostgreSQL instead of SQLite
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "quantara"
+    postgres_user: str = "root"
+    postgres_password: str = "1412"
+    postgres_schema: str = "cache"
+    
+    # Connection pool settings
+    postgres_pool_size: int = 10
+    postgres_max_overflow: int = 20
+    postgres_pool_timeout: int = 30
+    
+    # Fallback SQLite (if PostgreSQL unavailable)
+    cache_db_path: str = "cache/quantara_cache.db"
+
+@dataclass
 class QuantaraConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     reflection: ReflectionConfig = field(default_factory=ReflectionConfig)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
     debug_mode: bool = False
 
 # Global configuration
@@ -131,7 +170,7 @@ class LLMPerformanceMonitor:
         self.error_count: int = 0
         
     def log_request(self, model: str, prompt_tokens: int, completion_tokens: int, 
-                   response_time: float, error: bool = False):
+                   response_time: float, error: bool = False, cache_hit: bool = False):
         """Log a single LLM request"""
         if error:
             self.error_count += 1
@@ -141,16 +180,18 @@ class LLMPerformanceMonitor:
         tokens = prompt_tokens + completion_tokens
         self.total_tokens += tokens
         
-        # Calculate approximate cost
-        if "gpt-4" in model and "mini" not in model:
-            prompt_cost = prompt_tokens * 0.00001  # $0.01 per 1K tokens
-            completion_cost = completion_tokens * 0.00003  # $0.03 per 1K tokens
-        else:  # gpt-4o-mini or similar
-            prompt_cost = prompt_tokens * 0.000005  # $0.005 per 1K tokens
-            completion_cost = completion_tokens * 0.000015  # $0.015 per 1K tokens
+        # Only add to cost if not a cache hit
+        if not cache_hit:
+            # Calculate approximate cost
+            if "gpt-4" in model and "mini" not in model:
+                prompt_cost = prompt_tokens * 0.00001  # $0.01 per 1K tokens
+                completion_cost = completion_tokens * 0.00003  # $0.03 per 1K tokens
+            else:  # gpt-4o-mini or similar
+                prompt_cost = prompt_tokens * 0.000005  # $0.005 per 1K tokens
+                completion_cost = completion_tokens * 0.000015  # $0.015 per 1K tokens
             
-        request_cost = prompt_cost + completion_cost
-        self.total_cost += request_cost
+            request_cost = prompt_cost + completion_cost
+            self.total_cost += request_cost
         
         # Store response time
         self.response_times.append(response_time)
@@ -177,6 +218,458 @@ class LLMPerformanceMonitor:
 
 # Create singleton instance
 performance_monitor = LLMPerformanceMonitor()
+
+# ── Advanced Cache Manager with PostgreSQL ──────────────────────────────────
+class AdvancedCacheManager:
+    """Multi-layer caching system with PostgreSQL backend and memory cache."""
+    
+    def __init__(self, config: CacheConfig):
+        self.config = config
+        
+        # Memory cache (LRU-style with size limits)
+        self.memory_cache = {}
+        self.cache_access_times = {}
+        self.cache_sizes = {}
+        
+        # Cache statistics
+        self.stats = {
+            'hits': 0, 'misses': 0, 'memory_hits': 0, 'db_hits': 0,
+            'total_cached_items': 0, 'memory_usage_mb': 0
+        }
+        
+        # Initialize database connection
+        if config.use_postgresql:
+            try:
+                self._init_postgresql()
+                self.db_type = "postgresql"
+                print("✅ PostgreSQL cache initialized successfully")
+            except Exception as e:
+                print(f"⚠️ PostgreSQL connection failed: {e}")
+                print("🔄 Falling back to SQLite...")
+                self._init_sqlite_fallback()
+                self.db_type = "sqlite"
+        else:
+            self._init_sqlite_fallback()
+            self.db_type = "sqlite"
+    
+    def _init_postgresql(self):
+        """Initialize PostgreSQL connection with connection pooling."""
+        # Create connection pool
+        self.connection_pool = ThreadedConnectionPool(
+            minconn=1,
+            maxconn=self.config.postgres_pool_size,
+            host=self.config.postgres_host,
+            port=self.config.postgres_port,
+            database=self.config.postgres_db,
+            user=self.config.postgres_user,
+            password=self.config.postgres_password
+        )
+        
+        # Create tables and indexes
+        self._create_postgresql_tables()
+    
+    def _create_postgresql_tables(self):
+        """Create PostgreSQL tables and indexes for caching."""
+        with self._get_pg_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Create schema if not exists
+            cursor.execute(f'CREATE SCHEMA IF NOT EXISTS {self.config.postgres_schema}')
+            
+            # Cache entries table
+            cursor.execute(f'''
+                CREATE TABLE IF NOT EXISTS {self.config.postgres_schema}.cache_entries (
+                    cache_key VARCHAR(64) PRIMARY KEY,
+                    cache_type VARCHAR(50) NOT NULL,
+                    cached_data BYTEA NOT NULL,
+                    metadata JSONB DEFAULT '{{}}',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    last_accessed TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    expires_at TIMESTAMP WITH TIME ZONE,
+                    size_bytes INTEGER DEFAULT 0,
+                    access_count INTEGER DEFAULT 1
+                )
+            ''')
+            
+            # Create indexes for better performance
+            cursor.execute(f'''
+                CREATE INDEX IF NOT EXISTS idx_cache_type 
+                ON {self.config.postgres_schema}.cache_entries(cache_type)
+            ''')
+            cursor.execute(f'''
+                CREATE INDEX IF NOT EXISTS idx_expires_at 
+                ON {self.config.postgres_schema}.cache_entries(expires_at)
+            ''')
+            cursor.execute(f'''
+                CREATE INDEX IF NOT EXISTS idx_created_at 
+                ON {self.config.postgres_schema}.cache_entries(created_at)
+            ''')
+            
+            conn.commit()
+    
+    @contextmanager
+    def _get_pg_connection(self):
+        """Get PostgreSQL connection from pool."""
+        conn = None
+        try:
+            conn = self.connection_pool.getconn()
+            yield conn
+        finally:
+            if conn:
+                self.connection_pool.putconn(conn)
+    
+    def _init_sqlite_fallback(self):
+        """Initialize SQLite database as fallback."""
+        self.db_path = self.config.cache_db_path
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS cache_entries (
+                    key TEXT PRIMARY KEY,
+                    cache_type TEXT NOT NULL,
+                    value BLOB NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    accessed_at TIMESTAMP NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    size_bytes INTEGER NOT NULL
+                )
+            ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_cache_type ON cache_entries(cache_type)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_expires_at ON cache_entries(expires_at)')
+            conn.commit()
+    
+    def _generate_cache_key(self, cache_type: str, **kwargs) -> str:
+        """Generate a unique cache key based on inputs."""
+        key_data = {
+            'type': cache_type,
+            **kwargs
+        }
+        key_string = json.dumps(key_data, sort_keys=True)
+        return hashlib.sha256(key_string.encode()).hexdigest()
+    
+    def _cleanup_memory_cache(self):
+        """Clean up memory cache if it exceeds size limits."""
+        current_size_mb = sum(self.cache_sizes.values()) / (1024 * 1024)
+        
+        if current_size_mb > self.config.max_cache_size_mb:
+            # Remove oldest accessed items until we're under the limit
+            sorted_items = sorted(
+                self.cache_access_times.items(),
+                key=lambda x: x[1]
+            )
+            
+            for key, _ in sorted_items:
+                if key in self.memory_cache:
+                    size = self.cache_sizes.pop(key, 0)
+                    del self.memory_cache[key]
+                    del self.cache_access_times[key]
+                    current_size_mb -= size / (1024 * 1024)
+                    
+                    if current_size_mb <= self.config.max_cache_size_mb * 0.8:
+                        break
+    
+    def _cleanup_database_cache(self):
+        """Clean up expired database entries."""
+        if self.db_type == "postgresql":
+            with self._get_pg_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f'''
+                    DELETE FROM {self.config.postgres_schema}.cache_entries 
+                    WHERE expires_at < NOW()
+                ''')
+                conn.commit()
+        else:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute('DELETE FROM cache_entries WHERE expires_at < ?', (datetime.now(),))
+                conn.commit()
+    
+    def get(self, cache_type: str, **kwargs) -> Optional[any]:
+        """Retrieve item from cache with fallback to database."""
+        if not self._is_cache_enabled(cache_type):
+            return None
+            
+        cache_key = self._generate_cache_key(cache_type, **kwargs)
+        
+        # Check memory cache first
+        if cache_key in self.memory_cache:
+            self.cache_access_times[cache_key] = time.time()
+            self.stats['hits'] += 1
+            self.stats['memory_hits'] += 1
+            return self.memory_cache[cache_key]
+        
+        # Check database cache
+        if self.db_type == "postgresql":
+            return self._get_from_postgresql(cache_key, cache_type)
+        else:
+            return self._get_from_sqlite(cache_key, cache_type)
+    
+    def _get_from_postgresql(self, cache_key: str, cache_type: str) -> Optional[any]:
+        """Get cached item from PostgreSQL."""
+        try:
+            with self._get_pg_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f'''
+                    SELECT cached_data, expires_at FROM {self.config.postgres_schema}.cache_entries 
+                    WHERE cache_key = %s AND cache_type = %s
+                ''', (cache_key, cache_type))
+                
+                row = cursor.fetchone()
+                if row:
+                    value_blob, expires_at = row
+                    
+                    if expires_at is None or expires_at > datetime.now(expires_at.tzinfo):
+                        # Valid cache entry - deserialize and store in memory
+                        try:
+                            value = pickle.loads(bytes(value_blob))
+                            
+                            # Add to memory cache
+                            serialized_size = len(value_blob)
+                            self.memory_cache[cache_key] = value
+                            self.cache_access_times[cache_key] = time.time()
+                            self.cache_sizes[cache_key] = serialized_size
+                            
+                            # Update access time and count in database
+                            cursor.execute(f'''
+                                UPDATE {self.config.postgres_schema}.cache_entries 
+                                SET last_accessed = NOW(), access_count = access_count + 1
+                                WHERE cache_key = %s
+                            ''', (cache_key,))
+                            conn.commit()
+                            
+                            self.stats['hits'] += 1
+                            self.stats['db_hits'] += 1
+                            return value
+                        except Exception as e:
+                            print(f"Cache deserialization error: {e}")
+            
+            self.stats['misses'] += 1
+            return None
+        except Exception as e:
+            print(f"PostgreSQL cache retrieval error: {e}")
+            self.stats['misses'] += 1
+            return None
+    
+    def _get_from_sqlite(self, cache_key: str, cache_type: str) -> Optional[any]:
+        """Get cached item from SQLite (fallback)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute('''
+                    SELECT value, expires_at FROM cache_entries 
+                    WHERE key = ? AND cache_type = ?
+                ''', (cache_key, cache_type))
+                
+                row = cursor.fetchone()
+                if row:
+                    value_blob, expires_at = row
+                    expires_at = datetime.fromisoformat(expires_at)
+                    
+                    if expires_at > datetime.now():
+                        try:
+                            value = pickle.loads(value_blob)
+                            
+                            # Add to memory cache
+                            serialized_size = len(value_blob)
+                            self.memory_cache[cache_key] = value
+                            self.cache_access_times[cache_key] = time.time()
+                            self.cache_sizes[cache_key] = serialized_size
+                            
+                            # Update access time in database
+                            conn.execute('''
+                                UPDATE cache_entries SET accessed_at = ? WHERE key = ?
+                            ''', (datetime.now(), cache_key))
+                            conn.commit()
+                            
+                            self.stats['hits'] += 1
+                            self.stats['db_hits'] += 1
+                            return value
+                        except Exception as e:
+                            print(f"Cache deserialization error: {e}")
+            
+            self.stats['misses'] += 1
+            return None
+        except Exception as e:
+            print(f"SQLite cache retrieval error: {e}")
+            self.stats['misses'] += 1
+            return None
+    
+    def set(self, cache_type: str, value: any, **kwargs):
+        """Store item in both memory and database cache."""
+        if not self._is_cache_enabled(cache_type):
+            return
+            
+        cache_key = self._generate_cache_key(cache_type, **kwargs)
+        
+        try:
+            # Serialize the value
+            value_blob = pickle.dumps(value)
+            serialized_size = len(value_blob)
+            
+            # Calculate expiry time
+            expires_at = datetime.now() + timedelta(hours=self.config.cache_ttl_hours)
+            
+            # Store in memory cache
+            self.memory_cache[cache_key] = value
+            self.cache_access_times[cache_key] = time.time()
+            self.cache_sizes[cache_key] = serialized_size
+            
+            # Store in database cache
+            if self.db_type == "postgresql":
+                self._set_in_postgresql(cache_key, cache_type, value_blob, expires_at, serialized_size, kwargs)
+            else:
+                self._set_in_sqlite(cache_key, cache_type, value_blob, expires_at, serialized_size)
+            
+            self.stats['total_cached_items'] += 1
+            
+            # Cleanup if necessary
+            self._cleanup_memory_cache()
+            
+        except Exception as e:
+            print(f"Cache storage error: {e}")
+    
+    def _set_in_postgresql(self, cache_key: str, cache_type: str, value_blob: bytes, 
+                          expires_at: datetime, size_bytes: int, metadata: dict):
+        """Store cached item in PostgreSQL."""
+        try:
+            with self._get_pg_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f'''
+                    INSERT INTO {self.config.postgres_schema}.cache_entries 
+                    (cache_key, cache_type, cached_data, expires_at, size_bytes, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (cache_key) DO UPDATE SET
+                        cached_data = EXCLUDED.cached_data,
+                        last_accessed = NOW(),
+                        expires_at = EXCLUDED.expires_at,
+                        size_bytes = EXCLUDED.size_bytes,
+                        metadata = EXCLUDED.metadata,
+                        access_count = cache_entries.access_count + 1
+                ''', (
+                    cache_key, cache_type, value_blob, expires_at, size_bytes, json.dumps(metadata)
+                ))
+                conn.commit()
+        except Exception as e:
+            print(f"PostgreSQL cache storage error: {e}")
+    
+    def _set_in_sqlite(self, cache_key: str, cache_type: str, value_blob: bytes, 
+                      expires_at: datetime, size_bytes: int):
+        """Store cached item in SQLite (fallback)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute('''
+                    INSERT OR REPLACE INTO cache_entries 
+                    (key, cache_type, value, created_at, accessed_at, expires_at, size_bytes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    cache_key, cache_type, value_blob,
+                    datetime.now(), datetime.now(), expires_at, size_bytes
+                ))
+                conn.commit()
+        except Exception as e:
+            print(f"SQLite cache storage error: {e}")
+    
+    def _is_cache_enabled(self, cache_type: str) -> bool:
+        """Check if caching is enabled for the given type."""
+        cache_type_mapping = {
+            'response': self.config.enable_response_cache,
+            'embedding': self.config.enable_embedding_cache,
+            'retrieval': self.config.enable_retrieval_cache,
+            'thinking': self.config.enable_thinking_cache
+        }
+        return cache_type_mapping.get(cache_type, False)
+    
+    def clear_cache(self, cache_type: Optional[str] = None):
+        """Clear cache entries by type or all if type is None."""
+        if cache_type:
+            # Clear specific cache type from memory
+            keys_to_remove = [
+                key for key in self.memory_cache.keys()
+                if self._generate_cache_key(cache_type) in key
+            ]
+            for key in keys_to_remove:
+                self.memory_cache.pop(key, None)
+                self.cache_access_times.pop(key, None)
+                self.cache_sizes.pop(key, None)
+            
+            # Clear from database
+            if self.db_type == "postgresql":
+                with self._get_pg_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(f'''
+                        DELETE FROM {self.config.postgres_schema}.cache_entries 
+                        WHERE cache_type = %s
+                    ''', (cache_type,))
+                    conn.commit()
+            else:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute('DELETE FROM cache_entries WHERE cache_type = ?', (cache_type,))
+                    conn.commit()
+        else:
+            # Clear all cache
+            self.memory_cache.clear()
+            self.cache_access_times.clear()
+            self.cache_sizes.clear()
+            
+            if self.db_type == "postgresql":
+                with self._get_pg_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(f'DELETE FROM {self.config.postgres_schema}.cache_entries')
+                    conn.commit()
+            else:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute('DELETE FROM cache_entries')
+                    conn.commit()
+    
+    def get_stats(self) -> dict:
+        """Get comprehensive cache statistics."""
+        # Update memory usage
+        self.stats['memory_usage_mb'] = sum(self.cache_sizes.values()) / (1024 * 1024)
+        
+        # Get database stats
+        if self.db_type == "postgresql":
+            try:
+                with self._get_pg_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(f'''
+                        SELECT COUNT(*), SUM(size_bytes) 
+                        FROM {self.config.postgres_schema}.cache_entries
+                    ''')
+                    db_count, db_size_bytes = cursor.fetchone()
+                    
+                    cursor.execute(f'''
+                        SELECT cache_type, COUNT(*) 
+                        FROM {self.config.postgres_schema}.cache_entries 
+                        GROUP BY cache_type
+                    ''')
+                    type_counts = dict(cursor.fetchall())
+            except Exception as e:
+                print(f"Error getting PostgreSQL stats: {e}")
+                db_count, db_size_bytes, type_counts = 0, 0, {}
+        else:
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.execute('SELECT COUNT(*), SUM(size_bytes) FROM cache_entries')
+                    db_count, db_size_bytes = cursor.fetchone()
+                    
+                    cursor = conn.execute('''
+                        SELECT cache_type, COUNT(*) FROM cache_entries 
+                        GROUP BY cache_type
+                    ''')
+                    type_counts = dict(cursor.fetchall())
+            except Exception as e:
+                print(f"Error getting SQLite stats: {e}")
+                db_count, db_size_bytes, type_counts = 0, 0, {}
+        
+        return {
+            **self.stats,
+            'database_type': self.db_type,
+            'hit_rate': self.stats['hits'] / max(self.stats['hits'] + self.stats['misses'], 1),
+            'memory_items': len(self.memory_cache),
+            'db_items': db_count or 0,
+            'db_size_mb': (db_size_bytes or 0) / (1024 * 1024),
+            'type_distribution': type_counts
+        }
+
+# Initialize cache manager
+cache_manager = AdvancedCacheManager(config.cache)
 
 # ── Enhanced Memory Manager ──────────────────────────────────────────────────
 class EnhancedMemoryManager:
@@ -376,13 +869,49 @@ reflection_llm = ChatOpenAI(
 
 # ── Instrumented LLM Calls ───────────────────────────────────────────────────
 def instrumented_llm_call(llm, messages, **kwargs):
-    """Wrapper for LLM calls with performance monitoring."""
+    """Wrapper for LLM calls with performance monitoring and caching."""
+    # Try cache first
+    try:
+        cached_result = cache_manager.get(
+            cache_type='response',
+            messages=str(messages),
+            model=getattr(llm, 'model_name', str(llm)),
+            kwargs=str(kwargs)
+        )
+        
+        if cached_result is not None:
+            # Log cache hit
+            performance_monitor.log_request(
+                model=getattr(llm, 'model_name', str(llm)),
+                prompt_tokens=0,
+                completion_tokens=0,
+                response_time=0.001,  # Very fast cache response
+                error=False,
+                cache_hit=True
+            )
+            return cached_result
+    except Exception as e:
+        print(f"Cache lookup error: {e}")
+    
+    # Original instrumented call logic
     start_time = time.time()
     error_occurred = False
     
     try:
         response = llm.invoke(messages, **kwargs)
         end_time = time.time()
+        
+        # Cache the result
+        try:
+            cache_manager.set(
+                cache_type='response',
+                value=response,
+                messages=str(messages),
+                model=getattr(llm, 'model_name', str(llm)),
+                kwargs=str(kwargs)
+            )
+        except Exception as e:
+            print(f"Cache storage error: {e}")
         
         # Extract token usage if available
         usage = getattr(response, "usage", None)
@@ -417,12 +946,48 @@ def instrumented_llm_call(llm, messages, **kwargs):
         raise e
 
 async def instrumented_llm_call_async(llm, messages, **kwargs):
-    """Async wrapper for LLM calls with performance monitoring."""
+    """Async wrapper for LLM calls with performance monitoring and caching."""
+    # Try cache first
+    try:
+        cached_result = cache_manager.get(
+            cache_type='response',
+            messages=str(messages),
+            model=getattr(llm, 'model_name', str(llm)),
+            kwargs=str(kwargs)
+        )
+        
+        if cached_result is not None:
+            # Log cache hit
+            performance_monitor.log_request(
+                model=getattr(llm, 'model_name', str(llm)),
+                prompt_tokens=0,
+                completion_tokens=0,
+                response_time=0.001,  # Very fast cache response
+                error=False,
+                cache_hit=True
+            )
+            return cached_result
+    except Exception as e:
+        print(f"Cache lookup error: {e}")
+    
+    # Original async instrumented call logic
     start_time = time.time()
     
     try:
         response = await llm.ainvoke(messages, **kwargs)
         end_time = time.time()
+        
+        # Cache the result
+        try:
+            cache_manager.set(
+                cache_type='response',
+                value=response,
+                messages=str(messages),
+                model=getattr(llm, 'model_name', str(llm)),
+                kwargs=str(kwargs)
+            )
+        except Exception as e:
+            print(f"Cache storage error: {e}")
         
         # Extract token usage if available
         usage = getattr(response, "usage", None)
@@ -533,6 +1098,71 @@ async def thinking_node(state: CoTState):
         state["thinking_quality"] = 1.0
     
     return state
+
+# ── Cached LLM Wrapper Functions ─────────────────────────────────────────────
+def cached_llm_call(cache_type: str, llm, messages: list, **kwargs):
+    """Cached wrapper for LLM calls with fallback to direct call."""
+    try:
+        # Check cache first
+        cached_result = cache_manager.get(
+            cache_type=cache_type,
+            messages=str(messages),
+            model=getattr(llm, 'model_name', str(llm)),
+            **kwargs
+        )
+        
+        if cached_result is not None:
+            return cached_result
+        
+        # Make LLM call if not cached
+        result = llm.invoke(messages)
+        
+        # Cache the result
+        cache_manager.set(
+            cache_type=cache_type,
+            value=result,
+            messages=str(messages),
+            model=getattr(llm, 'model_name', str(llm)),
+            **kwargs
+        )
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in cached_llm_call: {e}")
+        # Fallback to direct call
+        return llm.invoke(messages)
+
+def cached_rag_call(query: str, retriever, **kwargs):
+    """Cached wrapper for RAG retrieval calls."""
+    try:
+        # Check cache first
+        cached_result = cache_manager.get(
+            cache_type='retrieval',
+            query=query,
+            retriever_config=str(kwargs)
+        )
+        
+        if cached_result is not None:
+            return cached_result
+        
+        # Make retrieval call if not cached
+        result = retriever.invoke(query)
+        
+        # Cache the result
+        cache_manager.set(
+            cache_type='retrieval',
+            value=result,
+            query=query,
+            retriever_config=str(kwargs)
+        )
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in cached_rag_call: {e}")
+        # Fallback to direct call
+        return retriever.invoke(query)
 
 @monitor_performance("RAG with CoT")
 def call_rag_with_cot(state: CoTState):
@@ -994,14 +1624,23 @@ I can help you with:
 • **Smart Self-Reflection**: Comprehensive quality evaluation with detailed metrics
 • **Adaptive RAG**: Intent-aware retrieval with structured response formatting
 • **Performance Monitoring**: Real-time cost and performance tracking
+• **Advanced Caching**: Multi-layer caching for ultra-fast responses and cost savings
 
 **📊 Quality & Performance:**
 • **Response Quality Scoring**: Automatic evaluation of answer comprehensiveness
-• **Cost Optimization**: Smart model selection (GPT-4 for main tasks, GPT-4o-mini for thinking)
-• **Performance Analytics**: Token usage, response times, and error tracking
+• **Cost Optimization**: Smart model selection + intelligent caching (GPT-4 for main tasks, GPT-4o-mini for thinking)
+• **Performance Analytics**: Token usage, response times, cache hit rates, and error tracking
+• **Multi-Layer Cache**: Memory + SQLite persistence for maximum performance
 • **Debug Mode**: View quality metrics and processing details
 
-**🔧 Enhanced Tools & Capabilities:**
+**� Caching Benefits:**
+• **Instant Responses**: Cached answers return in milliseconds
+• **Cost Reduction**: No API calls for repeated queries
+• **Smart Storage**: Automatic cleanup and size management
+• **PostgreSQL Backend**: Enterprise-grade database with connection pooling
+• **High Performance**: Advanced indexing and concurrent access support
+
+**�🔧 Enhanced Tools & Capabilities:**
 • **Structured Outputs**: Organized responses with clear sections and formatting
 • **Intent Recognition**: Automatic query classification for better responses
 • **Memory Management**: Intelligent conversation history with importance weighting
@@ -1011,7 +1650,8 @@ I can help you with:
 - Enable "Chain-of-Thought" to see my thinking process stream in real-time
 - Use "Self-Reflection" for quality assessment and improvement suggestions  
 - Turn on "Debug Mode" to see quality scores and performance metrics
-- Check "Show Performance Statistics" to monitor usage and costs
+- Check "Show Performance Statistics" to monitor usage, costs, and cache performance
+- Use "Cache Management" to clear cached data when needed
 
 **Available Tools:**
 """ + get_tool_info() + """
@@ -1056,6 +1696,12 @@ async def create_settings_ui():
             id="show_performance",
             label="📈 Show Performance Statistics",
             initial=False
+        ),
+        cl.input_widget.Select(
+            id="cache_action",
+            label="🔄 Cache Management",
+            values=["none", "clear_all", "clear_responses", "clear_retrievals"],
+            initial_index=0
         )
     ]
     
@@ -1103,6 +1749,31 @@ async def on_settings_update(settings):
             
             if stats['model_usage']:
                 settings_msg += f"- Model usage: `{stats['model_usage']}`"
+        
+        # Add cache statistics
+        cache_stats = cache_manager.get_stats()
+        settings_msg += f"\n\n🔄 **Cache Statistics:**\n"
+        settings_msg += f"- Cache hit rate: `{cache_stats['hit_rate']*100:.1f}%`\n"
+        settings_msg += f"- Total hits: `{cache_stats['hits']}`\n"
+        settings_msg += f"- Memory items: `{cache_stats['memory_items']}`\n"
+        settings_msg += f"- Database items: `{cache_stats['db_items']}`\n"
+        settings_msg += f"- Memory usage: `{cache_stats['memory_usage_mb']:.1f} MB`\n"
+        settings_msg += f"- Database size: `{cache_stats['db_size_mb']:.1f} MB`"
+        
+        if cache_stats['type_distribution']:
+            settings_msg += f"\n- Cache types: `{cache_stats['type_distribution']}`"
+    
+    # Handle cache management actions
+    cache_action = settings.get("cache_action")
+    if cache_action == "clear_all":
+        cache_manager.clear_cache()
+        settings_msg += f"\n\n🧹 **Cache cleared** - All cached data has been removed."
+    elif cache_action == "clear_responses":
+        cache_manager.clear_cache("response")
+        settings_msg += f"\n\n🧹 **Response cache cleared** - All cached responses have been removed."
+    elif cache_action == "clear_retrievals":
+        cache_manager.clear_cache("retrieval")
+        settings_msg += f"\n\n🧹 **Retrieval cache cleared** - All cached retrievals have been removed."
     
     # Recreate chain if retrieval settings changed
     if new_mode != current_mode or new_k != current_k:
