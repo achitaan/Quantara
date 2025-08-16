@@ -3,6 +3,16 @@ fastapi
 asyncpg
 yfinance
 #uvicorn[standard]==0.23.2
+python-dotenv==1.1.1
+pydantic==2.11.7
+
+# Data & finance
+pandas==2.3.1
+numpy==1.26.4
+scipy==1.16.0
+yfinance==0.2.65
+matplotlib>=3.7.0
+plotly
 
 # LangChain ecosystem
 langgraph
@@ -10,12 +20,6 @@ langchain
 langchain-community
 langchain-openai
 langchain-unstructured
-
-# Data visualization and analysis
-plotly
-pandas>=2.0.0
-numpy>=1.24.0
-scipy>=1.10.0
 
 # HTTP and async
 requests==2.31.0
@@ -45,3 +49,4 @@ pytest-asyncio>=0.21.0
 
 rank_bm25
 agno
+pytest-asyncio>=0.21.0
