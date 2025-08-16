@@ -1,7 +1,7 @@
 openai
 fastapi
 asyncpg
-yfinance
+
 #uvicorn[standard]==0.23.2
 python-dotenv==1.1.1
 pydantic==2.11.7
