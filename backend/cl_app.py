@@ -1666,7 +1666,7 @@ async def create_settings_ui():
         cl.input_widget.Switch(
             id="show_cot",
             label="🧠 Chain-of-Thought Reasoning",
-            initial=False
+            initial=True
         ),
         cl.input_widget.Switch(
             id="show_reflection",
@@ -1837,60 +1837,100 @@ async def main(message: cl.Message):
         await msg.update()
 
 async def show_thinking_process(msg: cl.Message, user_input: str):
-    """Show real-time thinking process."""
+    """Show real-time thinking process with letter-by-letter display."""
     thinking_prompt = f"""
-    Analyze this financial question efficiently:
+    Analyze this financial question step by step:
     Question: {user_input}
 
-    Provide concise thinking:
-    1. Question type: [analysis/calculation/research/regulatory]
-    2. Required data: [list key information needed]
-    3. Approach: [methodology in 1-2 sentences]
-    4. Key considerations: [main factors to address]
+    Provide detailed thinking process:
+    1. **Question Analysis**: What type of question is this and what are the key components?
+    2. **Required Information**: What data, documents, or knowledge do I need?
+    3. **Methodology**: What approach will I use to answer this comprehensively?
+    4. **Key Considerations**: What important factors should I keep in mind?
+    5. **Expected Outcome**: What kind of response would be most helpful?
+    
+    Be thorough but concise - aim for 4-6 detailed points.
     """
     
     # Initialize thinking display
     msg.content = """**🧠 Thinking Process:**
 
-```markdown
-Analyzing question...
+```
+🤔 Starting analysis...
 ```
 
-⏳ *Processing...*"""
+⏳ *Analyzing your question...*"""
     await msg.update()
     
     thinking_content = ""
     try:
-        # Stream thinking in real-time
+        print("Starting thinking process stream...")
+        
+        # Use astream for real-time token streaming
+        stream_started = False
         async for chunk in thinking_llm.astream([HumanMessage(content=thinking_prompt)]):
             if hasattr(chunk, 'content') and chunk.content:
+                if not stream_started:
+                    print("Stream started, receiving tokens...")
+                    stream_started = True
+                
                 thinking_content += chunk.content
                 
-                # Update display with current thinking
+                # Update display with current thinking (letter by letter effect)
                 formatted_thinking = f"""**🧠 Thinking Process:**
 
-```markdown
-{thinking_content}
+```
+{thinking_content}▋
 ```
 
-⏳ *Generating answer based on this analysis...*"""
+⏳ *Analyzing step by step...*"""
                 
                 msg.content = formatted_thinking
                 await msg.update()
                 
-                # Small delay to make streaming visible
-                await asyncio.sleep(0.1)
+                # Small delay for visible streaming effect
+                await asyncio.sleep(0.03)  # Faster updates for better effect
+        
+        # Final update without cursor
+        final_thinking = f"""**🧠 Thinking Process:**
+
+```
+{thinking_content}
+```
+
+✅ *Analysis complete - generating response...*"""
+        
+        msg.content = final_thinking
+        await msg.update()
+        await asyncio.sleep(0.5)  # Brief pause before showing answer
                 
     except Exception as e:
         print(f"Error in thinking stream: {e}")
-        msg.content = f"""**🧠 Thinking Process:**
+        # Fallback to non-streaming thinking
+        try:
+            response = await instrumented_llm_call_async(thinking_llm, [HumanMessage(content=thinking_prompt)])
+            thinking_content = response.content
+            
+            msg.content = f"""**🧠 Thinking Process:**
 
-```markdown
-Error generating thinking process: {str(e)}
+```
+{thinking_content}
 ```
 
-⏳ *Proceeding to answer generation...*"""
-        await msg.update()
+✅ *Analysis complete - generating response...*"""
+            await msg.update()
+            await asyncio.sleep(0.5)
+        except Exception as fallback_error:
+            print(f"Fallback thinking error: {fallback_error}")
+            msg.content = f"""**🧠 Thinking Process:**
+
+```
+Error generating thinking process: {str(e)}
+Fallback error: {str(fallback_error)}
+```
+
+⚠️ *Proceeding to answer generation...*"""
+            await msg.update()
 
 async def generate_answer(user_input: str, show_reflection: bool = False):
     """Generate the main answer using the RAG chain with enhanced quality assessment."""
