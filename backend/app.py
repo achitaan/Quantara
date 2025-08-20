@@ -8,10 +8,28 @@ from functools import wraps
 import time
 import os
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Literal, Optional
+from pydantic import BaseModel, Field
 
+from optimization.optimizer_factory import get_optimizer
+from optimization.utils import fetch_prices, holdings_to_current_weights, metrics
 # Load environment variables at startup
 load_dotenv()
+
+class OptimizeRequest(BaseModel):
+    holdings: Dict[str, float]                         # {"AAPL": 10, "MSFT": 5}
+    method: Literal["equal_weight","mean_variance","mean-variance","mvo","max_sharpe","max-sharpe"]
+    rf: Optional[float] = None
+    max_weight: Optional[float] = Field(default=None, ge=0, le=1)
+    allow_short: bool = False
+    horizon: Optional[str] = None                      # e.g., "6mo", "1y"
+
+class OptimizeResponse(BaseModel):
+    optimized_weights: Dict[str, float]
+    current_weights: Dict[str, float]
+    diff: Dict[str, float]
+    metrics_before: Dict[str, float]
+    metrics_after: Dict[str, float]
 
 app = FastAPI(
     title="Quantara AI API", 
@@ -384,3 +402,33 @@ async def root():
         },
         "enhanced_features": ENHANCED_FEATURES_AVAILABLE
     }
+
+@app.post("/optimize-portfolio", response_model=OptimizeResponse)
+async def optimize_portfolio(req: OptimizeRequest):
+    period = req.horizon or os.getenv("DATA_HORIZON", "1y")
+    prices = fetch_prices(req.holdings.keys(), period=period)
+    if prices.empty:
+        raise HTTPException(status_code=400, detail="No price data found for given holdings/period")
+
+    latest = prices.iloc[-1]
+    curr_w = holdings_to_current_weights(req.holdings, latest)
+
+    optimizer = get_optimizer(req.method, rf=req.rf, max_weight=req.max_weight, allow_short=req.allow_short)
+    opt_w = optimizer.optimize(prices, req.holdings)
+
+    rf = req.rf if req.rf is not None else float(os.getenv("RISK_FREE_RATE", "0.02"))
+    before = metrics(curr_w, prices, rf=rf)
+    after  = metrics(opt_w, prices, rf=rf)
+
+    # diff and rounding
+    tickers = list(prices.columns)
+    diff = {t: round(opt_w.get(t, 0.0) - curr_w.get(t, 0.0), 6) for t in tickers}
+    rnd = lambda d: {k: round(float(v), 6) for k, v in d.items()}
+
+    return OptimizeResponse(
+        optimized_weights=rnd(opt_w),
+        current_weights=rnd(curr_w),
+        diff=diff,
+        metrics_before={k: round(v, 6) for k, v in before.items()},
+        metrics_after={k: round(v, 6) for k, v in after.items()},
+    )

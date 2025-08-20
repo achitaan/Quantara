@@ -3,7 +3,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
-from .base_optimizer import BaseOptimizer
+from ..base_optimizer import BaseOptimizer
 
 class MeanVarianceOptimizer(BaseOptimizer):
     def __init__(self, rf: float | None = None, max_weight: float | None = None, allow_short: bool = False):
@@ -13,14 +13,15 @@ class MeanVarianceOptimizer(BaseOptimizer):
 
     def optimize(self, prices: pd.DataFrame, holdings: Dict[str, float]) -> Dict[str, float]:
         # returns & annualized moments
-        rets = prices.pct_change().dropna()
-        mu = rets.mean().values * 252.0
-        Sigma = rets.cov().values * 252.0
+        rets = prices.pct_change().dropna() # turn prices to daily simple returns
+        mu = rets.mean().values * 252.0 # compute expected returns and covariance matrix
+        Sigma = rets.cov().values * 252.0 # annualize
 
         n = len(mu)
         if n == 0:
             return {}
 
+        # max-sharpe using SLSQP
         def neg_sharpe(w: np.ndarray) -> float:
             ret = float(w @ mu)
             vol = float(np.sqrt(max(w @ Sigma @ w, 1e-18)))

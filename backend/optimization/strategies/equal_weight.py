@@ -1,7 +1,7 @@
 # Same weight for every company, more balanced portfolio
 from typing import Dict
 import pandas as pd
-from .base_optimizer import BaseOptimizer
+from ..base_optimizer import BaseOptimizer
 
 class EqualWeightOptimizer(BaseOptimizer):
     def optimize(self, prices: pd.DataFrame, holdings: Dict[str, float]) -> Dict[str, float]:
