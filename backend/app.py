@@ -105,6 +105,76 @@ def analyze_query_intent(user_content: str) -> dict:
         "all_scores": scores
     }
 
+def clean_response_text(response: str) -> str:
+    """Clean up response text by removing thinking sections and answer headers."""
+    # Handle the response by looking for structured sections
+    
+    # First, try to find if there's an "Answer:" section and extract everything after it
+    if "**Answer:**" in response:
+        # Split on **Answer:** and take everything after
+        parts = response.split("**Answer:**", 1)
+        if len(parts) > 1:
+            response = parts[1].strip()
+    elif "Answer:" in response:
+        # Split on Answer: and take everything after
+        parts = response.split("Answer:", 1)
+        if len(parts) > 1:
+            response = parts[1].strip()
+    
+    # Now remove any thinking sections that might be at the beginning
+    lines = response.split('\n')
+    cleaned_lines = []
+    skip_thinking = False
+    found_content = False
+    
+    for line in lines:
+        line_stripped = line.strip()
+        line_lower = line_stripped.lower()
+        
+        # Check if this is a thinking section header
+        if ('thinking:' in line_lower or '**thinking:**' in line_lower) and not found_content:
+            skip_thinking = True
+            continue
+        
+        # Check if we've reached actual content (starts with ## or # headers typically)
+        if line_stripped.startswith('#') or line_stripped.startswith('**') or (line_stripped and not skip_thinking):
+            skip_thinking = False
+            found_content = True
+        
+        # Skip lines that are part of the thinking section
+        if skip_thinking and not found_content:
+            continue
+        
+        # Keep the line if it's actual content
+        cleaned_lines.append(line)
+    
+    # Join the cleaned lines and remove extra whitespace
+    cleaned_text = '\n'.join(cleaned_lines).strip()
+    
+    # Remove any remaining headers at the beginning
+    while True:
+        old_text = cleaned_text
+        cleaned_text = cleaned_text.lstrip()
+        
+        if cleaned_text.lower().startswith('answer:'):
+            cleaned_text = cleaned_text[7:].strip()
+        elif cleaned_text.startswith('**Answer:**'):
+            cleaned_text = cleaned_text[11:].strip()
+        elif cleaned_text.lower().startswith('thinking:'):
+            # Find the next section
+            lines = cleaned_text.split('\n')
+            start_idx = 0
+            for i, line in enumerate(lines):
+                if line.strip().startswith('#') or (line.strip().startswith('**') and 'thinking' not in line.lower()):
+                    start_idx = i
+                    break
+            cleaned_text = '\n'.join(lines[start_idx:]).strip()
+        
+        if cleaned_text == old_text:
+            break
+    
+    return cleaned_text
+
 def calculate_response_quality(response: str, user_question: str) -> dict:
     """Calculate comprehensive quality metrics for responses."""
     metrics = {
@@ -146,21 +216,20 @@ def calculate_response_quality(response: str, user_question: str) -> dict:
 # Thread-safe enhanced functions
 @run_in_thread
 def generate_thinking_sync(user_input: str) -> str:
-    """Generate structured thinking process for a question."""
+    """Generate concise thinking process for a question."""
     if not ENHANCED_FEATURES_AVAILABLE:
         return "Enhanced thinking features not available"
     
     thinking_prompt = f"""
-    Analyze this financial question systematically:
-    Question: {user_input}
+    You are an AI assistant analyzing this question: {user_input}
 
-    Provide structured thinking:
-    1. **Question Category**: [analysis/calculation/research/regulatory/strategy]
-    2. **Core Concepts**: [key financial concepts involved]
-    3. **Information Needed**: [data, documents, or context required]
-    4. **Analytical Approach**: [methodology and framework]
-    5. **Key Considerations**: [important factors and constraints]
-    6. **Expected Output**: [format and depth of response needed]
+    Provide a brief, concise thinking process in bullet points (similar to ChatGPT's reasoning display):
+    - What type of question this is (analysis/calculation/research/etc.)
+    - Key concepts or data I need to consider
+    - My approach to answering this
+    - Any important assumptions or limitations
+
+    Keep it lightweight and focused - about 3-5 bullet points total. Don't include the actual answer, just the reasoning process.
     """
     
     try:
@@ -239,6 +308,56 @@ async def health_check():
     }
 
 
+from fastapi.responses import StreamingResponse
+import json
+
+@app.post("/thinking-stream")
+async def thinking_stream_endpoint(request: Request):
+    """Stream thinking process in real-time."""
+    try:
+        data = await request.json()
+        message = data.get("message", "")
+        
+        if not message:
+            return JSONResponse(status_code=400, content={"error": "Message is required"})
+
+        if not ENHANCED_FEATURES_AVAILABLE:
+            return JSONResponse(status_code=503, content={"error": "Enhanced features not available"})
+
+        async def generate_thinking_stream():
+            thinking_prompt = f"""
+            Analyze this financial question step by step:
+            Question: {message}
+
+            Provide detailed thinking process:
+            1. **Question Analysis**: What type of question is this and what are the key components?
+            2. **Required Information**: What data, documents, or knowledge do I need?
+            3. **Methodology**: What approach will I use to answer this comprehensively?
+            4. **Key Considerations**: What important factors should I keep in mind?
+            5. **Expected Outcome**: What kind of response would be most helpful?
+            
+            Be thorough but concise - aim for 4-6 detailed points.
+            """
+            
+            try:
+                async for chunk in thinking_llm.astream([HumanMessage(content=thinking_prompt)]):
+                    if hasattr(chunk, 'content') and chunk.content:
+                        yield f"data: {json.dumps({'type': 'thinking', 'content': chunk.content})}\n\n"
+                
+                yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+                
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+        return StreamingResponse(
+            generate_thinking_stream(),
+            media_type="text/plain",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        )
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Thinking stream error: {str(e)}"})
+
 @app.post("/chat")
 async def chat_endpoint(request: Request):
     """Enhanced chat endpoint with thinking and reflection capabilities."""
@@ -266,18 +385,21 @@ async def chat_endpoint(request: Request):
             # Get the main response
             response_text = await get_agent_response_sync(message, use_rag)
             
+            # Clean up the response text - remove thinking and answer headers
+            cleaned_response = clean_response_text(response_text)
+            
             # Calculate quality metrics
             intent_analysis = analyze_query_intent(message)
-            quality_metrics = calculate_response_quality(response_text, message)
+            quality_metrics = calculate_response_quality(cleaned_response, message)
             
             # Generate reflection if requested
             reflection = None
             if show_reflection:
-                reflection = await generate_reflection_sync(response_text, message)
+                reflection = await generate_reflection_sync(cleaned_response, message)
             
             # Build enhanced response
             result = {
-                "content": response_text,
+                "content": cleaned_response,
                 "thinking": thinking,
                 "reflection": reflection,
                 "quality_score": quality_metrics["overall_score"],
@@ -304,13 +426,16 @@ async def chat_endpoint(request: Request):
             # Simple mode - just basic response
             response_text = await get_agent_response_sync(message, use_rag)
             
+            # Clean up the response text even in simple mode
+            cleaned_response = clean_response_text(response_text)
+            
             # Ensure we return a proper response even in simple mode
-            if not response_text or response_text.strip() == "":
-                response_text = "I apologize, but I was unable to generate a response. Please try rephrasing your question."
+            if not cleaned_response or cleaned_response.strip() == "":
+                cleaned_response = "I apologize, but I was unable to generate a response. Please try rephrasing your question."
             
             return {
-                "response": response_text,  # Use 'response' field for compatibility
-                "content": response_text,   # Also include 'content' field for enhanced compatibility
+                "response": cleaned_response,  # Use 'response' field for compatibility
+                "content": cleaned_response,   # Also include 'content' field for enhanced compatibility
                 "processing_time": round(time.time() - start_time, 2),
                 "enhanced_mode": False
             }

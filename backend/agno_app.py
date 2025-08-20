@@ -112,6 +112,12 @@ class QuantaraAgent(Agent):
         • Stock Data: Real-time stock prices and charts
         • Regulatory Compliance: Basel Framework, compliance checklists, risk assessments
         
+        **CRITICAL: Response Format Rules:**
+        - Do NOT include any "Thinking:" or "**Thinking:**" sections in your response
+        - Do NOT include any "Answer:" or "**Answer:**" headers
+        - Start directly with your structured analysis
+        - Your response should contain ONLY the final analysis, not your reasoning process
+        
         **Response Guidelines:**
         1. Provide structured, professional responses
         2. Use clear headers and formatting
@@ -121,14 +127,14 @@ class QuantaraAgent(Agent):
         6. Highlight risks and considerations
         
         **Response Structure:**
-        For financial queries, use:
+        For financial queries, start directly with:
         ## Executive Summary
         ## Detailed Analysis  
         ## Key Metrics & Calculations
         ## Risk Assessment
         ## Actionable Recommendations
         
-        For regulatory queries, use:
+        For regulatory queries, start directly with:
         ## Regulatory Overview
         ## Key Requirements & Standards
         ## Implementation Framework
