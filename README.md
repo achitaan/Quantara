@@ -1,6 +1,6 @@
 # Quantara
 
-![Quantara Dashboard] <img width="2257" height="1383" alt="image" src="https://github.com/user-attachments/assets/f139ebd4-b3c8-4d48-a978-6dc9bc14993d" />
+<img width="2257" height="1383" alt="image" src="https://github.com/user-attachments/assets/f139ebd4-b3c8-4d48-a978-6dc9bc14993d" />
 
 **Quantara** is a full-stack financial analytics and trading research platform. It focuses on **portfolio construction**, **risk modeling**, and an **RL trading agent (DDPG)**—with a pragmatic engineering stack (FastAPI + Next.js) and reproducible workflows.
 
