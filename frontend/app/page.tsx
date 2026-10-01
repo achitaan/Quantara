@@ -2,6 +2,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -282,15 +283,27 @@ function Table({
 function Chart({
   data,
   title = "Portfolio equity",
+  benchmark = [],
 }: {
   data: Record<string, Json>[];
   title?: string;
+  benchmark?: Record<string, Json>[];
 }) {
   if (data.length < 2)
     return <p className="empty">Run a simulation to see its equity curve.</p>;
   const values = data.map((d) => number(d.equity ?? d.balance));
-  const min = Math.min(...values),
-    max = Math.max(...values),
+  const benchmarkByTime = new Map(
+    benchmark.map((d) => [text(d.timestamp), number(d.equity)]),
+  );
+  const benchmarkValues = data.map((d) =>
+    benchmarkByTime.get(text(d.timestamp)),
+  );
+  const scale = [
+    ...values,
+    ...benchmarkValues.filter((v): v is number => v !== undefined),
+  ];
+  const min = scale.reduce((a, b) => Math.min(a, b), Infinity),
+    max = scale.reduce((a, b) => Math.max(a, b), -Infinity),
     range = Math.max(1, max - min);
   const points = values.map((v, i) => [
     58 + (i / (values.length - 1)) * 670,
@@ -303,6 +316,9 @@ function Chart({
         <span>{title}</span>
         <strong>{money(values.at(-1) || 0)}</strong>
       </div>
+      {benchmark.length > 0 && (
+        <p>Solid purple: strategy · Dashed: benchmark</p>
+      )}
       <svg
         viewBox="0 0 760 270"
         role="img"
@@ -337,6 +353,27 @@ function Chart({
         ))}
         <path d={path + " L728,225 L58,225 Z"} fill="url(#area)" />
         <path d={path} fill="none" stroke="var(--purple)" strokeWidth="2.5" />
+        {benchmark.length > 0 && (
+          <path
+            aria-label="Benchmark equity"
+            d={benchmarkValues
+              .map((v, i) =>
+                v === undefined
+                  ? ""
+                  : (i === 0 || benchmarkValues[i - 1] === undefined
+                      ? "M"
+                      : "L") +
+                    (58 + (i / (values.length - 1)) * 670) +
+                    "," +
+                    (225 - ((v - min) / range) * 190),
+              )
+              .join(" ")}
+            fill="none"
+            stroke="var(--muted)"
+            strokeWidth="2"
+            strokeDasharray="7 5"
+          />
+        )}
         <text x="58" y="255" fill="var(--muted)" fontSize="11">
           {text(data[0].timestamp ?? data[0].date).slice(0, 10)}
         </text>
@@ -427,7 +464,12 @@ function Result({ value }: { value: unknown }) {
           keys={["symbol", "weight"]}
         />
       )}
-      {state.equity && <Chart data={rows(state.equity)} />}
+      {state.equity && (
+        <Chart
+          data={rows(state.equity)}
+          benchmark={rows(obj.benchmark_curve)}
+        />
+      )}
       {obj.forecast && (
         <>
           <Chart data={rows(obj.forecast)} title="Projected cash balance" />
@@ -445,17 +487,20 @@ function Result({ value }: { value: unknown }) {
         </>
       )}
       {state.fills && (
-        <Table
-          data={rows(state.fills)}
-          keys={[
-            "timestamp",
-            "symbol",
-            "side",
-            "quantity",
-            "price",
-            "commission",
-          ]}
-        />
+        <details>
+          <summary>Trade log ({rows(state.fills).length} fills)</summary>
+          <Table
+            data={rows(state.fills)}
+            keys={[
+              "timestamp",
+              "symbol",
+              "side",
+              "quantity",
+              "price",
+              "commission",
+            ]}
+          />
+        </details>
       )}
       {state.orders && (
         <details>
@@ -576,6 +621,19 @@ export default function Workspace() {
   const [busy, setBusy] = useState(false),
     [selectedPortfolio, setPortfolio] = useState(""),
     [selectedDataset, setDataset] = useState("");
+  const [simulationResult, setSimulationResult] = useState<unknown>(null);
+  const simulationResultsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (section === "Simulator" && simulationResult) {
+      const frame = requestAnimationFrame(() =>
+        simulationResultsRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        }),
+      );
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [section, simulationResult]);
   const [messages, setMessages] = useState<
       { role: string; content: string; warning?: string }[]
     >([]),
@@ -712,6 +770,7 @@ export default function Workspace() {
         if (failed) setError(failed.error || "The operation failed.");
         for (const j of completed) {
           setResult(j.result);
+          if (j.operation === "backtest") setSimulationResult(j.result);
           if (j.operation === "chat") {
             const reply = record(j.result);
             setConversation(text(reply.conversation_id));
@@ -845,6 +904,7 @@ export default function Workspace() {
   }
   function selectSection(next: Section) {
     setSection(next);
+    window.scrollTo({ top: 0, behavior: "auto" });
     setResult(null);
     setError("");
   }
@@ -1706,6 +1766,12 @@ export default function Workspace() {
                 title="Historical simulation"
                 subtitle="Long-only • next-bar execution • reproducible dataset versions"
               >
+                <p>
+                  Replay historical prices to test a strategy. Signals use
+                  closing data and orders can fill on a later bar. Results show
+                  portfolio value, return, drawdown and trades. This run
+                  finishes once; use Paper trading for ongoing simulation.
+                </p>
                 <form
                   className="form-grid"
                   onSubmit={form((d) =>
@@ -1785,9 +1851,16 @@ export default function Workspace() {
                   />
                   <button
                     className="primary"
-                    disabled={busy || !strategies.length}
+                    disabled={
+                      busy ||
+                      !strategies.length ||
+                      !datasets.length ||
+                      active.some((j) => j.operation === "backtest")
+                    }
                   >
-                    Run simulation →
+                    {active.some((j) => j.operation === "backtest")
+                      ? "Simulation running…"
+                      : "Run simulation →"}
                   </button>
                 </form>
                 <small>
@@ -1796,10 +1869,68 @@ export default function Workspace() {
                   rules, without retraining.
                 </small>
               </Panel>
+              <div ref={simulationResultsRef} style={{ scrollMarginTop: 24 }}>
+                <Panel
+                  title="Simulation results"
+                  subtitle="Historical replay results are saved automatically."
+                >
+                  {active.some((j) => j.operation === "backtest") && (
+                    <p role="status">
+                      Simulation running. Replaying historical bars…
+                    </p>
+                  )}
+                  {error && <p role="alert">{error}</p>}
+                  {simulationResult || lastTest ? (
+                    (() => {
+                      const saved = record(simulationResult || lastTest);
+                      return (
+                        <>
+                          <p role="status">
+                            {simulationResult
+                              ? "Simulation complete"
+                              : "Latest saved simulation"}
+                            : {text(saved.name)} ·{" "}
+                            {saved.fixture
+                              ? "Synthetic fixture"
+                              : text(saved.source)}
+                          </p>
+                          <p>
+                            {text(record(saved.period).start).slice(0, 10)} →{" "}
+                            {text(record(saved.period).end).slice(0, 10)}
+                          </p>
+                          <p>
+                            Benchmark return:{" "}
+                            {(
+                              number(
+                                record(saved.benchmark_metrics).total_return,
+                              ) * 100
+                            ).toFixed(2)}
+                            %. {text(record(saved.benchmark_comparison).scope)}
+                          </p>
+                          <Result value={saved} />
+                          <a
+                            href={
+                              "/api/backtests/" + text(saved.id) + "/trades.csv"
+                            }
+                          >
+                            Download full trade log CSV ↓
+                          </a>
+                        </>
+                      );
+                    })()
+                  ) : (
+                    <p className="empty">
+                      Choose history and a strategy above, then run a
+                      simulation. If the lists are empty, load the research demo
+                      from Overview or import market data and create a strategy.
+                    </p>
+                  )}
+                </Panel>
+              </div>
               <Panel title="Saved experiments">
                 <div className="experiment-list">
-                  {backtests.map((b) => (
-                    <button key={b.id} onClick={() => setResult(b)}>
+                  {[...backtests].reverse().map((b) => (
+                    <button key={b.id} onClick={() => setSimulationResult(b)}>
                       <Icon name="Simulator" />
                       <span>
                         <strong>{text(b.name)}</strong>
@@ -2529,11 +2660,13 @@ export default function Workspace() {
               </Panel>
             </div>
           )}
-          {result !== null && !record(result).operation && (
-            <Panel title="Recorded result">
-              <Result value={result} />
-            </Panel>
-          )}
+          {section !== "Simulator" &&
+            result !== null &&
+            !record(result).operation && (
+              <Panel title="Recorded result">
+                <Result value={result} />
+              </Panel>
+            )}
           {section !== "Overview" && reports.length > 0 && (
             <details className="saved-reports">
               <summary>Review saved analyses</summary>

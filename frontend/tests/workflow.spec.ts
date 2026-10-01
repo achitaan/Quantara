@@ -58,6 +58,25 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
   await expect(page.locator(".result")).toContainText("dataset_version", {
     timeout: 30000,
   });
+  await expect(
+    page.getByText("Simulation complete", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Simulation results", exact: true }),
+  ).toBeInViewport();
+  await expect(
+    page.getByText("Solid purple: strategy · Dashed: benchmark"),
+  ).toBeVisible();
+  const resultTop = await page
+    .getByRole("heading", { name: "Simulation results", exact: true })
+    .boundingBox();
+  const savedTop = await page
+    .getByRole("heading", { name: "Saved experiments", exact: true })
+    .boundingBox();
+  expect(resultTop!.y).toBeLessThan(savedTop!.y);
+  await expect(
+    page.getByRole("button", { name: "Run simulation" }),
+  ).toBeEnabled();
   await page.screenshot({ path: "../runtime/simulator.png", fullPage: true });
   await page
     .getByRole("navigation")
