@@ -1,6 +1,6 @@
 # Implementation status
 
-Branch: `codex/complete-quantara`. Baseline: remote `origin/main` commit `2f28d508cbdff1882f26c1ec3c00b8a72076b5a0`, including the eight commits missing locally.
+Development lineage: `codex/complete-quantara`. Baseline: remote `origin/main` commit `2f28d508cbdff1882f26c1ec3c00b8a72076b5a0`, including the eight commits missing locally.
 Alternate frontend chat work was reviewed. Broken combined-repository gitlinks supplied no recoverable source.
 Original prototypes are preserved under `legacy/` and excluded from the supported runtime.
 

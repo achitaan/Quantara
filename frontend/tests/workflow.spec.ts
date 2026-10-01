@@ -152,6 +152,10 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
 test("training charts expose recorded rewards and untouched test comparisons", async ({
   page,
 }) => {
+  test.skip(
+    process.env.QUANTARA_MODEL_TESTS !== "1",
+    "Real training requires the optional local model runtime.",
+  );
   await page.goto("/");
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(
