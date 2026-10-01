@@ -1,0 +1,46 @@
+name: Quantara checks
+on: [push, pull_request]
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: quantara
+          POSTGRES_USER: quantara
+          POSTGRES_PASSWORD: test-password
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U quantara" --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip, cache-dependency-path: backend/requirements.txt}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - run: pip install -r backend/requirements.txt
+      - run: python -m ruff check backend/quantara backend/tests scripts
+      - run: python -m pytest
+        env:
+          TEST_POSTGRES_URL: postgresql+psycopg://quantara:test-password@localhost:5432/quantara
+      - run: python scripts/export_openapi.py
+      - run: npm ci && npm run types && npm run typecheck && npm run build
+        working-directory: frontend
+      - run: git diff --exit-code docs/openapi.json frontend/lib/api-types.ts
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+      - run: docker compose config --quiet
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: {name: browser-test-results, path: frontend/test-results}
+  models:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r backend/requirements-models.txt
+      - run: QUANTARA_MODEL_TESTS=1 python -m pytest backend/tests/test_optional_models.py backend/tests/test_lightweight_models.py

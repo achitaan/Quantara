@@ -1,0 +1,3780 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Quantara research API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "summary": "Me",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolios": {
+      "get": {
+        "summary": "Portfolios",
+        "operationId": "portfolios_api_v1_portfolios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortfolioView"
+                  },
+                  "type": "array",
+                  "title": "Response Portfolios Api V1 Portfolios Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Portfolio",
+        "operationId": "portfolio_api_v1_portfolios_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Portfolio"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolios/{identifier}/transactions": {
+      "post": {
+        "summary": "Transactions",
+        "operationId": "transactions_api_v1_portfolios__identifier__transactions_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolios/{identifier}/csv": {
+      "post": {
+        "summary": "Transaction Csv",
+        "operationId": "transaction_csv_api_v1_portfolios__identifier__csv_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_transaction_csv_api_v1_portfolios__identifier__csv_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market": {
+      "get": {
+        "summary": "Datasets",
+        "operationId": "datasets_api_v1_market_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MarketInfo"
+                  },
+                  "type": "array",
+                  "title": "Response Datasets Api V1 Market Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/import": {
+      "post": {
+        "summary": "Dataset Import",
+        "operationId": "dataset_import_api_v1_market_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dataset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/{identifier}": {
+      "get": {
+        "summary": "Dataset Get",
+        "operationId": "dataset_get_api_v1_market__identifier__get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/csv": {
+      "post": {
+        "summary": "Market Csv",
+        "operationId": "market_csv_api_v1_market_csv_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_market_csv_api_v1_market_csv_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/fetch": {
+      "post": {
+        "summary": "Market Fetch",
+        "operationId": "market_fetch_api_v1_market_fetch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketFetch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/strategies": {
+      "get": {
+        "summary": "Strategies",
+        "operationId": "strategies_api_v1_strategies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StrategyView"
+                  },
+                  "type": "array",
+                  "title": "Response Strategies Api V1 Strategies Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Strategy",
+        "operationId": "strategy_api_v1_strategies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Strategy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/strategies/{identifier}": {
+      "put": {
+        "summary": "Update Strategy",
+        "operationId": "update_strategy_api_v1_strategies__identifier__put",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Strategy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/risk": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_risk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RiskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolios/optimize": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_portfolios_optimize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Optimize"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backtests": {
+      "get": {
+        "summary": "Backtests",
+        "operationId": "backtests_api_v1_backtests_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_backtests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Backtest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cashflow": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_cashflow_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Cashflow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tax/research": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_tax_research_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaxRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals/import": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_signals_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals/evaluate": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_signals_evaluate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsImpact"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals/fetch": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_signals_fetch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsFetch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/train": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_models_train_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/chat": {
+      "post": {
+        "summary": "Endpoint",
+        "operationId": "endpoint_api_v1_conversations_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backtests/{identifier}": {
+      "get": {
+        "summary": "Backtest Get",
+        "operationId": "backtest_get_api_v1_backtests__identifier__get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backtests/{identifier}/trades.csv": {
+      "get": {
+        "summary": "Trades Csv",
+        "operationId": "trades_csv_api_v1_backtests__identifier__trades_csv_get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paper-accounts": {
+      "get": {
+        "summary": "Paper Accounts",
+        "operationId": "paper_accounts_api_v1_paper_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Paper Create",
+        "operationId": "paper_create_api_v1_paper_accounts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paper-accounts/{identifier}/control": {
+      "post": {
+        "summary": "Control",
+        "operationId": "control_api_v1_paper_accounts__identifier__control_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperControl"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paper-accounts/{identifier}/step": {
+      "post": {
+        "summary": "Step",
+        "operationId": "step_api_v1_paper_accounts__identifier__step_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperStep"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paper-accounts/{identifier}/poll": {
+      "post": {
+        "summary": "Poll",
+        "operationId": "poll_api_v1_paper_accounts__identifier__poll_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "summary": "Reports",
+        "operationId": "reports_api_v1_reports_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cashflow/transactions": {
+      "get": {
+        "summary": "Cashbook",
+        "operationId": "cashbook_api_v1_cashflow_transactions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cashflow/csv": {
+      "post": {
+        "summary": "Cash Csv",
+        "operationId": "cash_csv_api_v1_cashflow_csv_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_cash_csv_api_v1_cashflow_csv_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cashflow/demo": {
+      "post": {
+        "summary": "Cash Demo",
+        "operationId": "cash_demo_api_v1_cashflow_demo_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cashflow/plaid/link-token": {
+      "post": {
+        "summary": "Plaid Link",
+        "operationId": "plaid_link_api_v1_cashflow_plaid_link_token_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cashflow/plaid/exchange": {
+      "post": {
+        "summary": "Plaid Exchange",
+        "operationId": "plaid_exchange_api_v1_cashflow_plaid_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaidExchange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cashflow/plaid/{identifier}/sync": {
+      "post": {
+        "summary": "Plaid Sync",
+        "operationId": "plaid_sync_api_v1_cashflow_plaid__identifier__sync_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{identifier}/tax.csv": {
+      "get": {
+        "summary": "Tax Csv",
+        "operationId": "tax_csv_api_v1_reports__identifier__tax_csv_get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals/csv": {
+      "post": {
+        "summary": "Signals Csv",
+        "operationId": "signals_csv_api_v1_signals_csv_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_signals_csv_api_v1_signals_csv_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals": {
+      "get": {
+        "summary": "Signals",
+        "operationId": "signals_api_v1_signals_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "summary": "Models",
+        "operationId": "models_api_v1_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "summary": "Conversations",
+        "operationId": "conversations_api_v1_conversations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{identifier}": {
+      "get": {
+        "summary": "Conversation",
+        "operationId": "conversation_api_v1_conversations__identifier__get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents": {
+      "get": {
+        "summary": "Documents",
+        "operationId": "documents_api_v1_documents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Document",
+        "operationId": "document_api_v1_documents_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/pdf": {
+      "post": {
+        "summary": "Document Pdf",
+        "operationId": "document_pdf_api_v1_documents_pdf_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_document_pdf_api_v1_documents_pdf_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/reindex": {
+      "post": {
+        "summary": "Reindex",
+        "operationId": "reindex_api_v1_documents_reindex_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "summary": "Preferences",
+        "operationId": "preferences_api_v1_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set Preferences",
+        "operationId": "set_preferences_api_v1_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "summary": "Job List",
+        "operationId": "job_list_api_v1_jobs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobView"
+                  },
+                  "type": "array",
+                  "title": "Response Job List Api V1 Jobs Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{identifier}": {
+      "get": {
+        "summary": "Job Get",
+        "operationId": "job_get_api_v1_jobs__identifier__get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{identifier}/cancel": {
+      "post": {
+        "summary": "Cancel",
+        "operationId": "cancel_api_v1_jobs__identifier__cancel_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{identifier}/retry": {
+      "post": {
+        "summary": "Retry",
+        "operationId": "retry_api_v1_jobs__identifier__retry_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{identifier}/events": {
+      "get": {
+        "summary": "Events",
+        "operationId": "events_api_v1_jobs__identifier__events_get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/demo": {
+      "post": {
+        "summary": "Demo",
+        "operationId": "demo_api_v1_demo_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat": {
+      "post": {
+        "summary": "Legacy Chat",
+        "operationId": "legacy_chat_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Backtest": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "capital": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Capital",
+            "default": 100000
+          },
+          "commission": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Commission",
+            "default": 0
+          },
+          "slippage_bps": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Slippage Bps",
+            "default": 5
+          },
+          "spread_bps": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Spread Bps",
+            "default": 0
+          },
+          "participation": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Participation",
+            "default": 0.01
+          },
+          "benchmark": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$",
+            "title": "Benchmark",
+            "default": "SPY"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "train_fraction": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Train Fraction",
+            "default": 0.6
+          },
+          "validation_fraction": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Validation Fraction",
+            "default": 0.2
+          },
+          "evaluation": {
+            "type": "string",
+            "enum": [
+              "full",
+              "test",
+              "walk_forward"
+            ],
+            "title": "Evaluation",
+            "default": "full"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "strategy_id"
+        ],
+        "title": "Backtest"
+      },
+      "Balance": {
+        "properties": {
+          "cash": {
+            "type": "number",
+            "title": "Cash"
+          },
+          "holdings": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Holdings"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "accounts": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Accounts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cash",
+          "holdings",
+          "currency",
+          "accounts"
+        ],
+        "title": "Balance"
+      },
+      "Bar": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "symbol": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$",
+            "title": "Symbol"
+          },
+          "open": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Open"
+          },
+          "high": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "High"
+          },
+          "low": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Low"
+          },
+          "close": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Close"
+          },
+          "volume": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Volume"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "timestamp",
+          "symbol",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume"
+        ],
+        "title": "Bar"
+      },
+      "Body_cash_csv_api_v1_cashflow_csv_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_cash_csv_api_v1_cashflow_csv_post"
+      },
+      "Body_document_pdf_api_v1_documents_pdf_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_document_pdf_api_v1_documents_pdf_post"
+      },
+      "Body_market_csv_api_v1_market_csv_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "options": {
+            "type": "string",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "options"
+        ],
+        "title": "Body_market_csv_api_v1_market_csv_post"
+      },
+      "Body_signals_csv_api_v1_signals_csv_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "options": {
+            "type": "string",
+            "title": "Options",
+            "default": "{\"method\":\"baseline\"}"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_signals_csv_api_v1_signals_csv_post"
+      },
+      "Body_transaction_csv_api_v1_portfolios__identifier__csv_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_transaction_csv_api_v1_portfolios__identifier__csv_post"
+      },
+      "CashTransaction": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "CAD"
+            ],
+            "title": "Currency",
+            "default": "CAD"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "external_id",
+          "timestamp",
+          "amount",
+          "category"
+        ],
+        "title": "CashTransaction"
+      },
+      "Cashflow": {
+        "properties": {
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/CashTransaction"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "minItems": 2,
+            "title": "Transactions"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance",
+            "default": 10000
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "CAD"
+            ],
+            "title": "Currency",
+            "default": "CAD"
+          },
+          "days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "default": 30
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "prophet",
+              "lstm"
+            ],
+            "title": "Method",
+            "default": "baseline"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "transactions"
+        ],
+        "title": "Cashflow"
+      },
+      "Chat": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "use_rag": {
+            "type": "boolean",
+            "title": "Use Rag",
+            "default": true
+          },
+          "show_thinking": {
+            "type": "boolean",
+            "title": "Show Thinking",
+            "default": false
+          },
+          "show_reflection": {
+            "type": "boolean",
+            "title": "Show Reflection",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "Chat"
+      },
+      "CorporateAction": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "symbol": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$",
+            "title": "Symbol"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "split",
+              "dividend"
+            ],
+            "title": "Type"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "timestamp",
+          "symbol",
+          "type",
+          "amount"
+        ],
+        "title": "CorporateAction"
+      },
+      "Dataset": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "1d",
+              "1m",
+              "5m"
+            ],
+            "title": "Interval",
+            "default": "1d"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Source"
+          },
+          "coverage": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Coverage"
+          },
+          "fixture": {
+            "type": "boolean",
+            "title": "Fixture",
+            "default": false
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/Bar"
+            },
+            "type": "array",
+            "maxItems": 200000,
+            "minItems": 3,
+            "title": "Bars"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/CorporateAction"
+            },
+            "type": "array",
+            "title": "Actions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "source",
+          "coverage",
+          "bars"
+        ],
+        "title": "Dataset"
+      },
+      "DatasetView": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "1d",
+              "1m",
+              "5m"
+            ],
+            "title": "Interval",
+            "default": "1d"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Source"
+          },
+          "coverage": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Coverage"
+          },
+          "fixture": {
+            "type": "boolean",
+            "title": "Fixture",
+            "default": false
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/Bar"
+            },
+            "type": "array",
+            "maxItems": 200000,
+            "minItems": 3,
+            "title": "Bars"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/CorporateAction"
+            },
+            "type": "array",
+            "title": "Actions"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "source",
+          "coverage",
+          "bars",
+          "id"
+        ],
+        "title": "DatasetView"
+      },
+      "DocumentInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "text"
+        ],
+        "title": "DocumentInput"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Arguments"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "complete",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "operation",
+          "arguments",
+          "status",
+          "progress",
+          "message",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "JobView"
+      },
+      "Login": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Login"
+      },
+      "MarketFetch": {
+        "properties": {
+          "symbols": {
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Symbols"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "1d",
+              "1m",
+              "5m"
+            ],
+            "title": "Interval",
+            "default": "1d"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "yahoo",
+              "alpaca"
+            ],
+            "title": "Provider",
+            "default": "yahoo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbols",
+          "start",
+          "end"
+        ],
+        "title": "MarketFetch"
+      },
+      "MarketInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "interval": {
+            "type": "string",
+            "title": "Interval"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "coverage": {
+            "type": "string",
+            "title": "Coverage"
+          },
+          "fixture": {
+            "type": "boolean",
+            "title": "Fixture"
+          },
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Symbols"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "bars_count": {
+            "type": "integer",
+            "title": "Bars Count"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "interval",
+          "source",
+          "coverage",
+          "fixture",
+          "symbols",
+          "start",
+          "end",
+          "bars_count",
+          "version"
+        ],
+        "title": "MarketInfo"
+      },
+      "NewsFetch": {
+        "properties": {
+          "symbols": {
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+            },
+            "type": "array",
+            "title": "Symbols"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "distilbert"
+            ],
+            "title": "Method",
+            "default": "distilbert"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbols",
+          "start",
+          "end"
+        ],
+        "title": "NewsFetch"
+      },
+      "NewsImpact": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "horizon_bars": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Horizon Bars",
+            "default": 5
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id"
+        ],
+        "title": "NewsImpact"
+      },
+      "NewsImport": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NewsItem"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Items"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "distilbert"
+            ],
+            "title": "Method",
+            "default": "baseline"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "NewsImport"
+      },
+      "NewsItem": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "available_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Available At"
+          },
+          "symbols": {
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Symbols"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          },
+          "fixture": {
+            "type": "boolean",
+            "title": "Fixture",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "external_id",
+          "timestamp",
+          "available_at",
+          "symbols",
+          "text",
+          "source"
+        ],
+        "title": "NewsItem"
+      },
+      "Optimize": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "equal_weight",
+              "mean_variance",
+              "min_volatility",
+              "risk_parity",
+              "black_litterman",
+              "cvar"
+            ],
+            "title": "Method",
+            "default": "equal_weight"
+          },
+          "holdings": {
+            "patternProperties": {
+              "^[A-Z][A-Z0-9.\\-]{0,14}$": {
+                "type": "number",
+                "minimum": 0.0
+              }
+            },
+            "type": "object",
+            "title": "Holdings"
+          },
+          "max_weight": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Weight",
+            "default": 1
+          },
+          "rf": {
+            "type": "number",
+            "title": "Rf",
+            "default": 0.02
+          },
+          "allow_short": {
+            "type": "boolean",
+            "title": "Allow Short",
+            "default": false
+          },
+          "views": {
+            "patternProperties": {
+              "^[A-Z][A-Z0-9.\\-]{0,14}$": {
+                "type": "number"
+              }
+            },
+            "type": "object",
+            "title": "Views"
+          },
+          "confidence": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Confidence",
+            "default": 0.5
+          },
+          "risk_aversion": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Risk Aversion",
+            "default": 2.5
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id"
+        ],
+        "title": "Optimize"
+      },
+      "PaperControl": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "pause",
+              "resume",
+              "stop"
+            ],
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "PaperControl"
+      },
+      "PaperCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "config": {
+            "$ref": "#/components/schemas/Backtest"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "replay",
+              "forward"
+            ],
+            "title": "Mode",
+            "default": "replay"
+          },
+          "feed": {
+            "type": "string",
+            "enum": [
+              "alpaca",
+              "yahoo"
+            ],
+            "title": "Feed",
+            "default": "alpaca"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "config"
+        ],
+        "title": "PaperCreate"
+      },
+      "PaperStep": {
+        "properties": {
+          "bars": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Bars",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PaperStep"
+      },
+      "PlaidExchange": {
+        "properties": {
+          "public_token": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Public Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "public_token"
+        ],
+        "title": "PlaidExchange"
+      },
+      "Portfolio": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "CAD"
+            ],
+            "title": "Currency",
+            "default": "USD"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "title": "Transactions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Portfolio"
+      },
+      "PortfolioView": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "CAD"
+            ],
+            "title": "Currency",
+            "default": "USD"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "title": "Transactions"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Balance"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "id",
+          "balance"
+        ],
+        "title": "PortfolioView"
+      },
+      "RiskRequest": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "weights": {
+            "patternProperties": {
+              "^[A-Z][A-Z0-9.\\-]{0,14}$": {
+                "type": "number",
+                "minimum": 0.0
+              }
+            },
+            "type": "object",
+            "title": "Weights"
+          },
+          "benchmark": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$",
+            "title": "Benchmark",
+            "default": "SPY"
+          },
+          "confidence": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Confidence",
+            "default": 0.95
+          },
+          "shocks": {
+            "patternProperties": {
+              "^[A-Z][A-Z0-9.\\-]{0,14}$": {
+                "type": "number"
+              }
+            },
+            "type": "object",
+            "title": "Shocks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "weights"
+        ],
+        "title": "RiskRequest"
+      },
+      "SettingsInput": {
+        "properties": {
+          "watchlist": {
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Watchlist"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ],
+            "title": "Theme",
+            "default": "dark"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SettingsInput"
+      },
+      "Strategy": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "buy_hold",
+              "sma",
+              "rsi",
+              "momentum",
+              "rebalance",
+              "sentiment",
+              "rl"
+            ],
+            "title": "Type",
+            "default": "buy_hold"
+          },
+          "symbols": {
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Symbols"
+          },
+          "fast": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 2.0,
+            "title": "Fast",
+            "default": 10
+          },
+          "slow": {
+            "type": "integer",
+            "maximum": 2000.0,
+            "minimum": 3.0,
+            "title": "Slow",
+            "default": 30
+          },
+          "rsi_buy": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rsi Buy",
+            "default": 30
+          },
+          "rsi_sell": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rsi Sell",
+            "default": 70
+          },
+          "rebalance_every": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Rebalance Every",
+            "default": 20
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "equal_weight",
+              "mean_variance",
+              "min_volatility",
+              "risk_parity",
+              "black_litterman",
+              "cvar"
+            ],
+            "title": "Method",
+            "default": "equal_weight"
+          },
+          "limit_offset_bps": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Offset Bps"
+          },
+          "sentiment_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Sentiment Threshold",
+            "default": 0.2
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "symbols"
+        ],
+        "title": "Strategy"
+      },
+      "StrategyView": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "buy_hold",
+              "sma",
+              "rsi",
+              "momentum",
+              "rebalance",
+              "sentiment",
+              "rl"
+            ],
+            "title": "Type",
+            "default": "buy_hold"
+          },
+          "symbols": {
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Symbols"
+          },
+          "fast": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 2.0,
+            "title": "Fast",
+            "default": 10
+          },
+          "slow": {
+            "type": "integer",
+            "maximum": 2000.0,
+            "minimum": 3.0,
+            "title": "Slow",
+            "default": 30
+          },
+          "rsi_buy": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rsi Buy",
+            "default": 30
+          },
+          "rsi_sell": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rsi Sell",
+            "default": 70
+          },
+          "rebalance_every": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Rebalance Every",
+            "default": 20
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "equal_weight",
+              "mean_variance",
+              "min_volatility",
+              "risk_parity",
+              "black_litterman",
+              "cvar"
+            ],
+            "title": "Method",
+            "default": "equal_weight"
+          },
+          "limit_offset_bps": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Offset Bps"
+          },
+          "sentiment_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Sentiment Threshold",
+            "default": 0.2
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "symbols",
+          "id"
+        ],
+        "title": "StrategyView"
+      },
+      "TaxRequest": {
+        "properties": {
+          "portfolio_id": {
+            "type": "string",
+            "title": "Portfolio Id"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          },
+          "affiliated_records_complete": {
+            "type": "boolean",
+            "title": "Affiliated Records Complete",
+            "default": false
+          },
+          "marks_cad": {
+            "patternProperties": {
+              "^[A-Z][A-Z0-9.\\-]{0,14}$": {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              }
+            },
+            "type": "object",
+            "title": "Marks Cad"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "portfolio_id",
+          "as_of"
+        ],
+        "title": "TaxRequest"
+      },
+      "TrainRequest": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "symbols": {
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Symbols"
+          },
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "DDPG",
+              "PPO"
+            ],
+            "title": "Algorithm",
+            "default": "PPO"
+          },
+          "timesteps": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 100.0,
+            "title": "Timesteps",
+            "default": 2000
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Seed",
+            "default": 42
+          },
+          "train_fraction": {
+            "type": "number",
+            "exclusiveMaximum": 0.8,
+            "exclusiveMinimum": 0.0,
+            "title": "Train Fraction",
+            "default": 0.6
+          },
+          "validation_fraction": {
+            "type": "number",
+            "exclusiveMaximum": 0.4,
+            "exclusiveMinimum": 0.0,
+            "title": "Validation Fraction",
+            "default": 0.2
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "symbols"
+        ],
+        "title": "TrainRequest"
+      },
+      "Transaction": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "External Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "deposit",
+              "withdrawal",
+              "buy",
+              "sell",
+              "dividend",
+              "split",
+              "adjustment"
+            ],
+            "title": "Type"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Quantity",
+            "default": 0
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Price",
+            "default": 0
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount",
+            "default": 0
+          },
+          "fee": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Fee",
+            "default": 0
+          },
+          "fx_cad": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Cad"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "CAD"
+            ],
+            "title": "Currency",
+            "default": "USD"
+          },
+          "account": {
+            "type": "string",
+            "title": "Account",
+            "default": "main"
+          },
+          "account_type": {
+            "type": "string",
+            "enum": [
+              "taxable",
+              "registered"
+            ],
+            "title": "Account Type",
+            "default": "taxable"
+          },
+          "affiliated": {
+            "type": "boolean",
+            "title": "Affiliated",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "external_id",
+          "timestamp",
+          "type"
+        ],
+        "title": "Transaction"
+      },
+      "TransactionsInput": {
+        "properties": {
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "minItems": 1,
+            "title": "Transactions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "transactions"
+        ],
+        "title": "TransactionsInput"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

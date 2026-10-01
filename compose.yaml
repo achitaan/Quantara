@@ -1,0 +1,91 @@
+name: quantara
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+    args:
+      INSTALL_MODELS: ${INSTALL_MODELS:-false}
+  environment: &environment
+    DATABASE_URL: postgresql+psycopg://quantara:${POSTGRES_PASSWORD:-quantara-local-db}@postgres:5432/quantara
+    RUNTIME_DIR: /app/runtime
+    REDIS_URL: redis://redis:6379/0
+    TASK_BACKEND: celery
+    DEMO_MODE: ${DEMO_MODE:-true}
+    TEAM_USERNAME: ${TEAM_USERNAME:-demo}
+    TEAM_PASSWORD: ${TEAM_PASSWORD:-quantara-local-demo}
+    LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+    LLM_MODEL: ${LLM_MODEL:-qwen3.5:4b}
+    OLLAMA_URL: http://ollama:11434
+    HOSTED_LLM_URL: ${HOSTED_LLM_URL:-}
+    HOSTED_LLM_KEY: ${HOSTED_LLM_KEY:-}
+    EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+    ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ALPACA_KEY: ${ALPACA_KEY:-}
+    ALPACA_SECRET: ${ALPACA_SECRET:-}
+    PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
+    PLAID_SECRET: ${PLAID_SECRET:-}
+  volumes:
+    - runtime:/app/runtime
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: quantara
+      POSTGRES_USER: quantara
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantara-local-db}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantara"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:8000:8000"]
+  worker:
+    <<: *backend
+    command: celery -A quantara.worker:celery_app worker --loglevel=info --concurrency=2
+  scheduler:
+    <<: *backend
+    command: celery -A quantara.worker:celery_app beat --loglevel=info --schedule=/app/runtime/celerybeat-schedule
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      BACKEND_URL: http://api:8000
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [api]
+  ollama:
+    image: ollama/ollama:0.35.0
+    profiles: [ai]
+    environment:
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_CONTEXT_LENGTH: "8192"
+      OLLAMA_NUM_PARALLEL: "1"
+      LLAMA_ARG_CACHE_RAM: "256"
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ollama:/root/.ollama
+    ports: ["127.0.0.1:11434:11434"]
+volumes:
+  postgres:
+  redis:
+  runtime:
+  ollama:

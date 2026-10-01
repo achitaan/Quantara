@@ -1,0 +1,15 @@
+.git
+.venv
+**/node_modules
+**/.next
+**/__pycache__
+.pytest_cache
+runtime
+legacy
+quantarafinal
+**/.env
+**/.env.local
+**/.venv
+**/cache
+**/vector_store
+*.pdf
