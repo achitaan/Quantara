@@ -78,6 +78,17 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
     page.getByRole("button", { name: "Run simulation" }),
   ).toBeEnabled();
   await page.screenshot({ path: "../runtime/simulator.png", fullPage: true });
+  await page.getByRole("button", { name: "Drawdown", exact: true }).click();
+  await expect(
+    page.getByRole("img", { name: "Drawdown from previous peak", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("slider", { name: "Inspect data point" }).press("Home");
+  await expect(page.locator(".research-chart .metric-strip")).toContainText(
+    "0.00%",
+  );
+  await page
+    .getByRole("button", { name: "Portfolio value", exact: true })
+    .click();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Paper trading", exact: true })
@@ -127,13 +138,70 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
     .getByPlaceholder("Ask about your recorded results…")
     .fill("Explain the recorded simulation and its limitations.");
   await page.getByRole("button", { name: "Send", exact: false }).click();
-  await expect(page.locator(".message.assistant")).toBeVisible({
+  await expect(
+    page.locator(".message.assistant:not(.streaming-reply)"),
+  ).toBeVisible({
     timeout: 30000,
   });
-  await expect(page.locator(".message.assistant")).toContainText(
-    "calculations run independently",
-  );
+  await expect(
+    page.locator(".message.assistant:not(.streaming-reply)"),
+  ).toContainText("calculations run independently");
   expect(errors).toEqual([]);
+});
+
+test("training charts expose recorded rewards and untouched test comparisons", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enter workspace" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your research, connected." }),
+  ).toBeVisible();
+  await page.request.post("/api/demo", { data: {} });
+  await page.getByRole("button", { name: /Refresh/ }).click();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Models", exact: true })
+    .click();
+  await page
+    .getByRole("spinbutton", { name: "Training steps", exact: true })
+    .fill("384");
+  await page
+    .getByRole("button", { name: "Train and evaluate", exact: true })
+    .click();
+  await expect(
+    page.getByRole("img", { name: "Held-out portfolio value", exact: true }),
+  ).toBeVisible({ timeout: 60000 });
+  await expect(
+    page.getByRole("img", { name: "Training reward", exact: true }),
+  ).toBeVisible();
+  const panel = page.locator(".panel").filter({
+    has: page.getByRole("heading", {
+      name: "Training and evaluation charts",
+      exact: true,
+    }),
+  });
+  await expect(panel).toContainText(
+    "Training reward is not held-out performance",
+  );
+  await expect(panel).toContainText("Benchmark (before costs)");
+  await expect(
+    panel.getByRole("button", { name: "Trained policy", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("slider").first().press("Home");
+  await expect(panel.locator(".chart-title span").first()).toHaveText(
+    "Step 100",
+  );
+  await panel
+    .getByRole("button", { name: "Episode returns", exact: true })
+    .click();
+  await expect(
+    panel.getByRole("img", { name: "Training episode returns", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../runtime/training-charts.png",
+    fullPage: true,
+  });
 });
 
 test("mobile navigation and safe text rendering", async ({ page }) => {

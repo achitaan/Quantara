@@ -3,17 +3,22 @@ import json
 from pathlib import Path
 import re
 from uuid import uuid4
+from functools import lru_cache
 
 import numpy as np
 
 from .model_runtime import serialized_training
 
 
+@lru_cache(maxsize=2)
 @serialized_training
 def make_encoder(model):
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(model)
+    try:
+        return SentenceTransformer(model, local_files_only=True, device="cpu")
+    except OSError as exc:
+        raise ValueError("Local embedding weights are unavailable. Download the configured embedding model once; text search works before indexing.") from exc
 
 
 def chunks(documents):

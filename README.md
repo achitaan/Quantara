@@ -51,16 +51,22 @@ Optional DistilBERT, embeddings/FAISS, Prophet, LSTM and PPO/DDPG:
 .\.venv\Scripts\python.exe -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements-models.txt
 $env:QUANTARA_MODEL_TESTS = "1"
+$env:HF_HOME = Join-Path (Get-Location) "runtime/huggingface"
+.\.venv\Scripts\python.exe scripts\cache_embedding_model.py
 .\.venv\Scripts\python.exe -m pytest backend\tests\test_optional_models.py backend\tests\test_lightweight_models.py
 ```
 
-Weights download on first use; inference/training runs locally. The financial classifier is [navu013/finbert-sentiment-distilbert](https://huggingface.co/navu013/finbert-sentiment-distilbert).
+Embedding weights are downloaded explicitly with the command above. Document inference loads cached weights offline on CPU and reuses the encoder. Other optional weights download on first use; inference/training runs locally. The financial classifier is [navu013/finbert-sentiment-distilbert](https://huggingface.co/navu013/finbert-sentiment-distilbert).
 Its published benchmark is not a Quantara performance claim.
 Embeddings default to `sentence-transformers/all-MiniLM-L6-v2`. Import sources and rebuild their index in Assistant.
 Indexes record model/revision/dimensions/document hash and reject incompatible data. Legacy paid-embedding indexes are never loaded. Lexical search works before indexing.
 
 Run `python scripts/benchmark_ai.py` after model setup for real latency, residency and tool/citation evaluation.
 Review its saved explanations against calculated results for numerical agreement. No larger model is recommended before measurement.
+
+Simulator charts support portfolio value, drawdown, series toggles and keyboard/pointer inspection. Models shows live training rewards, completed episode returns and held-out curves for the policy, buy-and-hold, SMA, momentum and the benchmark. Older checkpoints lack recorded learning curves and must be retrained to populate those charts. Training rewards never substitute for test performance.
+
+Assistant streams clearly labeled reply previews while checking the final citations. Document search can be toggled; completed messages list passages, pages, retrieval mode and elapsed time. Greetings and document-only questions avoid unrelated records/tool schemas. Local inference keeps Qwen loaded for 30 minutes after a request (`LLM_KEEP_ALIVE`) and defaults to 600 output tokens (`LLM_MAX_TOKENS`); cold model loading can still delay the first reply.
 Hosted inference requires explicit `LLM_PROVIDER=hosted`, HTTPS `HOSTED_LLM_URL`, `HOSTED_LLM_KEY` and `LLM_MODEL`.
 
 ## Docker / team use

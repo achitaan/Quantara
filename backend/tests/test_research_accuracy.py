@@ -468,6 +468,15 @@ def test_real_training_reproducibility_future_isolation_and_checkpoint_integrity
     assert a["requested_timesteps"] == request.timesteps
     assert a["costs"]["commission"] == 0.5 and a["costs"]["spread_bps"] == 10
     assert a["train_end"] < a["validation_end"] < a["test_start"]
+    assert a["training_history"] == b["training_history"]
+    assert a["training_history"][-1]["step"] == a["timesteps"]
+    assert sum(p["window_steps"] for p in a["training_history"]) == a["timesteps"]
+    for name, curve in a["evaluation"]["curves"].items():
+        assert 2 <= len(curve) <= 1000
+        assert curve[0]["equity"] == request.capital
+        assert curve[1]["timestamp"][:10] >= a["test_start"]
+        assert curve[-1]["timestamp"] == a["evaluation"]["period"]["end"]
+    assert a["evaluation"]["curves"]["policy"][-1]["equity"] == pytest.approx(request.capital * (1 + a["evaluation"]["policy"]["total_return"]))
     path = tmp_path / "models" / (a["checkpoint"] + ".zip")
     path.write_bytes(path.read_bytes() + b"corrupted")
     with pytest.raises(ValueError, match="checksum"):

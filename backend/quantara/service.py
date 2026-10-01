@@ -280,6 +280,7 @@ class Services:
                 except KeyError:
                     pass
             req = TrainRequest.model_validate(arguments)
+            progress(0.01, "Waiting for the local training runtime")
             result = rl.train(
                 req,
                 self.dataset(req.dataset_id, owner),

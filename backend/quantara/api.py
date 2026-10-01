@@ -643,8 +643,11 @@ def create_app(settings=None, store=None):
         return preferences(user)
 
     @app.get("/api/v1/jobs", response_model=list[JobView])
-    def job_list(user=Depends(owner)):
-        return store.list("job", user)
+    def job_list(include_results: bool = True, user=Depends(owner)):
+        records = store.list("job", user)
+        if not include_results:
+            return [dict(job, result=None, details=job.get("details", {}) if job["status"] in ("running", "queued") else {}) for job in records]
+        return records
 
     @app.get("/api/v1/jobs/{identifier}", response_model=JobView)
     def job_get(identifier: str, user=Depends(owner)):
@@ -663,13 +666,17 @@ def create_app(settings=None, store=None):
         return jobs.retry(identifier, user)
 
     @app.get("/api/v1/jobs/{identifier}/events")
-    async def events(identifier: str, user=Depends(owner)):
+    async def events(identifier: str, include_results: bool = True, user=Depends(owner)):
         store.get("job", identifier, user)
 
         async def stream():
             last = None
             while True:
                 job = clean(await run_in_threadpool(store.get, "job", identifier, user))
+                if not include_results:
+                    job["result"] = None
+                    if job["status"] not in ("queued", "running"):
+                        job["details"] = {}
                 encoded = json.dumps(job)
                 if encoded != last:
                     yield "data: " + encoded + "\n\n"

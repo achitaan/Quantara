@@ -394,6 +394,7 @@ class JobView(Schema):
     result: dict | list | None = None
     error: str | None = None
     attempt: str | None = None
+    details: dict = Field(default_factory=dict)
 
 
 class MarketInfo(Schema):

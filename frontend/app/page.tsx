@@ -9,6 +9,11 @@ import {
 } from "react";
 import ReactMarkdown from "react-markdown";
 import {
+  EquityCharts,
+  SeriesChart,
+  TrainingCharts,
+} from "@/components/research-charts";
+import {
   api,
   record,
   rows,
@@ -289,105 +294,21 @@ function Chart({
   title?: string;
   benchmark?: Record<string, Json>[];
 }) {
-  if (data.length < 2)
-    return <p className="empty">Run a simulation to see its equity curve.</p>;
-  const values = data.map((d) => number(d.equity ?? d.balance));
-  const benchmarkByTime = new Map(
-    benchmark.map((d) => [text(d.timestamp), number(d.equity)]),
-  );
-  const benchmarkValues = data.map((d) =>
-    benchmarkByTime.get(text(d.timestamp)),
-  );
-  const scale = [
-    ...values,
-    ...benchmarkValues.filter((v): v is number => v !== undefined),
-  ];
-  const min = scale.reduce((a, b) => Math.min(a, b), Infinity),
-    max = scale.reduce((a, b) => Math.max(a, b), -Infinity),
-    range = Math.max(1, max - min);
-  const points = values.map((v, i) => [
-    58 + (i / (values.length - 1)) * 670,
-    225 - ((v - min) / range) * 190,
-  ]);
-  const path = points.map((p, i) => (i ? "L" : "M") + p.join(",")).join(" ");
-  return (
-    <div className="chart">
-      <div className="chart-title">
-        <span>{title}</span>
-        <strong>{money(values.at(-1) || 0)}</strong>
-      </div>
-      {benchmark.length > 0 && (
-        <p>Solid purple: strategy · Dashed: benchmark</p>
-      )}
-      <svg
-        viewBox="0 0 760 270"
-        role="img"
-        aria-label={
-          title +
-          " from " +
-          money(values[0]) +
-          " to " +
-          money(values.at(-1) || 0)
-        }
-      >
-        <defs>
-          <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="var(--purple)" stopOpacity=".25" />
-            <stop offset="1" stopColor="var(--purple)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[0, 0.5, 1].map((v) => (
-          <g key={v}>
-            <line
-              x1="58"
-              x2="728"
-              y1={225 - v * 190}
-              y2={225 - v * 190}
-              stroke="var(--line)"
-              strokeDasharray="4 6"
-            />
-            <text x="0" y={230 - v * 190} fill="var(--muted)" fontSize="11">
-              {money(min + v * range)}
-            </text>
-          </g>
-        ))}
-        <path d={path + " L728,225 L58,225 Z"} fill="url(#area)" />
-        <path d={path} fill="none" stroke="var(--purple)" strokeWidth="2.5" />
-        {benchmark.length > 0 && (
-          <path
-            aria-label="Benchmark equity"
-            d={benchmarkValues
-              .map((v, i) =>
-                v === undefined
-                  ? ""
-                  : (i === 0 || benchmarkValues[i - 1] === undefined
-                      ? "M"
-                      : "L") +
-                    (58 + (i / (values.length - 1)) * 670) +
-                    "," +
-                    (225 - ((v - min) / range) * 190),
-              )
-              .join(" ")}
-            fill="none"
-            stroke="var(--muted)"
-            strokeWidth="2"
-            strokeDasharray="7 5"
-          />
-        )}
-        <text x="58" y="255" fill="var(--muted)" fontSize="11">
-          {text(data[0].timestamp ?? data[0].date).slice(0, 10)}
-        </text>
-        <text
-          x="728"
-          y="255"
-          textAnchor="end"
-          fill="var(--muted)"
-          fontSize="11"
-        >
-          {text(data.at(-1)?.timestamp ?? data.at(-1)?.date).slice(0, 10)}
-        </text>
-      </svg>
-    </div>
+  return title === "Portfolio equity" ? (
+    <EquityCharts data={data} benchmark={benchmark} />
+  ) : (
+    <SeriesChart
+      title={title}
+      series={[
+        {
+          name: "Cash balance",
+          points: data.map((p) => ({
+            x: text(p.timestamp ?? p.date),
+            y: number(p.equity ?? p.balance),
+          })),
+        },
+      ]}
+    />
   );
 }
 function Result({ value }: { value: unknown }) {
@@ -635,10 +556,29 @@ export default function Workspace() {
     }
   }, [section, simulationResult]);
   const [messages, setMessages] = useState<
-      { role: string; content: string; warning?: string }[]
+      {
+        role: string;
+        content: string;
+        warning?: string;
+        meta?: Record<string, Json>;
+      }[]
     >([]),
     [conversation, setConversation] = useState<string>();
   const [conversationList, setConversationList] = useState<RecordData[]>([]);
+  const [trainingResult, setTrainingResult] = useState<unknown>(null);
+  const [useRag, setUseRag] = useState(true);
+  const [clockTick, setClockTick] = useState(Date.now());
+  const [draftMessage, setDraftMessage] = useState("");
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const [liveJobs, setLiveJobs] = useState<Record<string, Job>>({});
+  const trainingResultsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (section === "Models" && trainingResult)
+      trainingResultsRef.current?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+  }, [section, trainingResult]);
   const [pendingJobs, setPendingJobs] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<{
     watchlist: string[];
@@ -700,7 +640,7 @@ export default function Workspace() {
         api<RecordData[]>("signals"),
         api<RecordData[]>("models"),
         api<RecordData[]>("reports"),
-        api<Job[]>("jobs"),
+        api<Job[]>("jobs?include_results=false"),
         api<RecordData[]>("documents"),
         api<RecordData[]>("conversations"),
         api<{ transactions: Json[] }>("cashflow/transactions"),
@@ -743,12 +683,15 @@ export default function Workspace() {
       return;
     const timer = setInterval(async () => {
       try {
-        const next = await api<Job[]>("jobs");
-        const completed = next.filter(
+        const next = await api<Job[]>("jobs?include_results=false");
+        const completedSummaries = next.filter(
           (j) =>
             j.status === "complete" &&
             (pendingJobs.includes(j.id) ||
               jobs.some((old) => old.id === j.id && old.status !== "complete")),
+        );
+        const completed = await Promise.all(
+          completedSummaries.map((j) => api<Job>("jobs/" + j.id)),
         );
         const failed = next.find(
           (j) =>
@@ -771,6 +714,7 @@ export default function Workspace() {
         for (const j of completed) {
           setResult(j.result);
           if (j.operation === "backtest") setSimulationResult(j.result);
+          if (j.operation === "train") setTrainingResult(j.result);
           if (j.operation === "chat") {
             const reply = record(j.result);
             setConversation(text(reply.conversation_id));
@@ -780,6 +724,7 @@ export default function Workspace() {
                 role: "assistant",
                 content: text(reply.content),
                 warning: text(reply.warning),
+                meta: reply,
               },
             ]);
           }
@@ -847,9 +792,53 @@ export default function Workspace() {
       : dataset?.symbols || []
     ).map((s, _, a) => [s, 1 / a.length]),
   );
-  const active = jobs.filter(
-    (j) => j.status === "queued" || j.status === "running",
-  );
+  const active = jobs
+    .filter((j) => j.status === "queued" || j.status === "running")
+    .map((j) => liveJobs[j.id] || j);
+  const watchIds = jobs
+    .filter((j) => j.status === "running" || j.status === "queued")
+    .map((j) => j.id)
+    .sort()
+    .join(",");
+  useEffect(() => {
+    if (!user || !watchIds) return;
+    const streams = watchIds.split(",").map((id) => {
+      const stream = new EventSource(
+        "/api/jobs/" + id + "/events?include_results=false",
+      );
+      stream.onmessage = (event) => {
+        try {
+          const job = JSON.parse(event.data) as Job;
+          setLiveJobs((old) => ({ ...old, [id]: job }));
+          if (["complete", "failed", "cancelled"].includes(job.status))
+            stream.close();
+        } catch {
+          stream.close();
+        }
+      };
+      return stream;
+    });
+    return () => streams.forEach((stream) => stream.close());
+  }, [user, watchIds]);
+  const trainingJob = active.find((j) => j.operation === "train");
+  const chatJob = active.find((j) => j.operation === "chat");
+  const backtestJob = active.find((j) => j.operation === "backtest");
+  useEffect(() => {
+    if (section === "Models" && trainingJob)
+      trainingResultsRef.current?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+  }, [section, trainingJob?.id]);
+  useEffect(() => {
+    const element = chatMessagesRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [messages, chatJob?.details, section]);
+  useEffect(() => {
+    if (!chatJob) return;
+    const timer = setInterval(() => setClockTick(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [chatJob?.id]);
   const lastTest = backtests.at(-1),
     lastEquity = rows(record(lastTest?.state).equity);
   async function fileChange(
@@ -1869,7 +1858,7 @@ export default function Workspace() {
                   rules, without retraining.
                 </small>
               </Panel>
-              <div ref={simulationResultsRef} style={{ scrollMarginTop: 24 }}>
+              <div ref={simulationResultsRef} style={{ scrollMarginTop: 120 }}>
                 <Panel
                   title="Simulation results"
                   subtitle="Historical replay results are saved automatically."
@@ -1879,6 +1868,12 @@ export default function Workspace() {
                       Simulation running. Replaying historical bars…
                     </p>
                   )}
+                  {rows(record(backtestJob?.details).equity).length > 1 && (
+                    <Chart
+                      data={rows(record(backtestJob?.details).equity)}
+                      title="Live replay portfolio value"
+                    />
+                  )}
                   {error && <p role="alert">{error}</p>}
                   {simulationResult || lastTest ? (
                     (() => {
@@ -1886,9 +1881,11 @@ export default function Workspace() {
                       return (
                         <>
                           <p role="status">
-                            {simulationResult
-                              ? "Simulation complete"
-                              : "Latest saved simulation"}
+                            {backtestJob
+                              ? "Previous saved simulation"
+                              : simulationResult
+                                ? "Simulation complete"
+                                : "Latest saved simulation"}
                             : {text(saved.name)} ·{" "}
                             {saved.fixture
                               ? "Synthetic fixture"
@@ -2475,20 +2472,64 @@ export default function Workspace() {
                     value={100000}
                   />
                   <ExecutionCosts />
-                  <button className="primary" disabled={busy}>
-                    Train and evaluate
+                  <button
+                    className="primary"
+                    disabled={busy || !!trainingJob || !datasets.length}
+                  >
+                    {trainingJob ? "Training…" : "Train and evaluate"}
                   </button>
                 </form>
                 <small>
-                  Local CPU training requires optional model dependencies. A
-                  saved checkpoint is compared with buy-and-hold, SMA and
-                  momentum on held-out history.
+                  Training charts update as sampled rewards arrive. Training
+                  reward is not proof of predictive skill. Local CPU training
+                  requires optional model dependencies. A saved checkpoint is
+                  compared with buy-and-hold, SMA and momentum on held-out
+                  history.
                 </small>
               </Panel>
+              <div ref={trainingResultsRef} style={{ scrollMarginTop: 120 }}>
+                <Panel
+                  title="Training and evaluation charts"
+                  subtitle="Learning curves use training data; performance comparisons use untouched test history."
+                >
+                  {trainingJob && (
+                    <>
+                      <p role="status">
+                        {trainingJob.message} ·{" "}
+                        {(trainingJob.progress * 100).toFixed(0)}%
+                      </p>
+                      <TrainingCharts value={trainingJob.details} live />
+                    </>
+                  )}
+                  {!trainingJob && (trainingResult || models.at(-1)) && (
+                    <>
+                      <p>
+                        Saved checkpoint:{" "}
+                        {text(record(trainingResult || models.at(-1)).name)} ·
+                        training ends{" "}
+                        {text(
+                          record(trainingResult || models.at(-1)).train_end,
+                        )}{" "}
+                        · test starts{" "}
+                        {text(
+                          record(trainingResult || models.at(-1)).test_start,
+                        )}
+                      </p>
+                      <TrainingCharts value={trainingResult || models.at(-1)} />
+                    </>
+                  )}
+                  {!trainingJob && !trainingResult && !models.length && (
+                    <p className="empty">
+                      Train a policy to see learning curves and held-out
+                      portfolio value against simple strategies.
+                    </p>
+                  )}
+                </Panel>
+              </div>
               <Panel title="Saved checkpoints">
                 <div className="experiment-list">
                   {models.map((m) => (
-                    <button key={m.id} onClick={() => setResult(m)}>
+                    <button key={m.id} onClick={() => setTrainingResult(m)}>
                       <Icon name="Models" />
                       <span>
                         <strong>{text(m.name)}</strong>
@@ -2529,6 +2570,7 @@ export default function Workspace() {
                           role: text(m.role),
                           content: text(m.content),
                           warning: text(m.warning),
+                          meta: record(m),
                         })),
                       );
                     }}
@@ -2541,7 +2583,7 @@ export default function Workspace() {
                     ))}
                   </select>
                 </label>
-                <div className="chat-messages">
+                <div className="chat-messages" ref={chatMessagesRef}>
                   {!messages.length && (
                     <div className="chat-empty">
                       <div className="assistant-mark">✦</div>
@@ -2560,9 +2602,112 @@ export default function Workspace() {
                       </small>
                       <ReactMarkdown skipHtml>{m.content}</ReactMarkdown>
                       {m.warning && <p className="notice">{m.warning}</p>}
+                      {m.meta && (
+                        <small className="reply-meta">
+                          {number(m.meta.latency_seconds).toFixed(1)}s ·
+                          Retrieval:{" "}
+                          {text(m.meta.retrieval_mode).replaceAll("_", " ")} ·{" "}
+                          {rows(m.meta.sources).length} passages ·{" "}
+                          {rows(m.meta.tools).length} tool calls
+                        </small>
+                      )}
+                      {rows(m.meta?.sources).length > 0 && (
+                        <details>
+                          <summary>Document sources used</summary>
+                          {rows(m.meta?.sources).map((source, n) => (
+                            <div className="source-excerpt" key={n}>
+                              <strong>
+                                {text(source.name)} · page {number(source.page)}
+                              </strong>
+                              <p>{text(source.text)}</p>
+                              <small>{text(source.citation)}</small>
+                            </div>
+                          ))}
+                        </details>
+                      )}
                     </div>
                   ))}
+                  {chatJob && (
+                    <div
+                      className="message assistant streaming-reply"
+                      role="status"
+                    >
+                      <small>Quantara · {chatJob.message}</small>
+                      <p>
+                        Elapsed{" "}
+                        {Math.max(
+                          0,
+                          (clockTick - Date.parse(chatJob.created_at)) / 1000,
+                        ).toFixed(0)}
+                        s · Retrieval:{" "}
+                        {text(
+                          record(chatJob.details).retrieval_mode,
+                        ).replaceAll("_", " ") || "preparing"}{" "}
+                        · {number(record(chatJob.details).source_count)}{" "}
+                        passages
+                      </p>
+                      {text(record(chatJob.details).draft) ? (
+                        <>
+                          <small>
+                            Reply preview — citations checked when complete
+                          </small>
+                          <ReactMarkdown skipHtml>
+                            {text(record(chatJob.details).draft)}
+                          </ReactMarkdown>
+                        </>
+                      ) : (
+                        <p>Finding evidence or preparing the local model…</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void act(async () => {
+                            await api("jobs/" + chatJob.id + "/cancel", {});
+                            setMessages((old) => [
+                              ...old,
+                              {
+                                role: "assistant",
+                                content:
+                                  "Response stopped. The unfinished preview was not saved as a completed explanation.",
+                              },
+                            ]);
+                          })
+                        }
+                      >
+                        Stop response
+                      </button>
+                    </div>
+                  )}
                 </div>
+                <label className="rag-toggle">
+                  <input
+                    type="checkbox"
+                    checked={useRag}
+                    onChange={(e) => setUseRag(e.target.checked)}
+                  />
+                  Search my documents (RAG)
+                </label>
+                <div className="button-row assistant-prompts">
+                  {[
+                    "Explain my latest backtest and its benchmark.",
+                    "Explain my recorded portfolio risk.",
+                    "Summarize the research documents and cite pages.",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      disabled={!!chatJob}
+                      onClick={() => setDraftMessage(prompt)}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+                <small>
+                  Uses local embeddings when an index is built, or text search
+                  before indexing. The final reply lists retrieved passages and
+                  page citations.
+                </small>
                 <form
                   className="chat-compose"
                   onSubmit={(e) => {
@@ -2575,27 +2720,26 @@ export default function Workspace() {
                       { role: "user", content: message },
                     ]);
                     form.reset();
+                    setDraftMessage("");
                     void submit("conversations/chat", {
                       message,
                       conversation_id: conversation,
                       portfolio_id: selectedPortfolio || null,
                       dataset_id: selectedDataset || null,
+                      use_rag: useRag,
                     });
                   }}
                 >
                   <textarea
                     name="message"
+                    value={draftMessage}
+                    onChange={(e) => setDraftMessage(e.target.value)}
                     required
                     maxLength={8000}
                     placeholder="Ask about your recorded results…"
                   />
-                  <button
-                    className="primary"
-                    disabled={
-                      busy || active.some((j) => j.operation === "chat")
-                    }
-                  >
-                    Send ↑
+                  <button className="primary" disabled={busy || !!chatJob}>
+                    {chatJob ? "Responding…" : "Send ↑"}
                   </button>
                 </form>
                 <small>
@@ -2661,6 +2805,8 @@ export default function Workspace() {
             </div>
           )}
           {section !== "Simulator" &&
+            section !== "Models" &&
+            section !== "Assistant" &&
             result !== null &&
             !record(result).operation && (
               <Panel title="Recorded result">

@@ -1285,6 +1285,10 @@ export interface components {
             error?: string | null;
             /** Attempt */
             attempt?: string | null;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
         };
         /** Login */
         Login: {
@@ -3375,7 +3379,9 @@ export interface operations {
     };
     job_list_api_v1_jobs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_results?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3389,6 +3395,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3488,7 +3503,9 @@ export interface operations {
     };
     events_api_v1_jobs__identifier__events_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_results?: boolean;
+            };
             header?: never;
             path: {
                 identifier: string;

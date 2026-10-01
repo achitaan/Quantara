@@ -8,6 +8,7 @@ import numpy as np
 from .market import aligned_prices, validate_sessions, version
 from .model_runtime import serialized_training
 from .schemas import Backtest, Strategy
+from .telemetry import publish
 from .simulation import (
     ENGINE_VERSION,
     execute,
@@ -130,6 +131,7 @@ def trained_policy(record, runtime):
 
 @serialized_training
 def train(request, dataset, runtime, progress=lambda *_: None):
+    progress(0.02, "Preparing the training environment")
     from stable_baselines3 import DDPG, PPO
     from stable_baselines3.common.callbacks import BaseCallback
     from stable_baselines3.common.utils import set_random_seed
@@ -169,15 +171,38 @@ def train(request, dataset, runtime, progress=lambda *_: None):
         benchmark=request.benchmark,
     )
     env = make_environment(train_data, request.symbols, config)
+    training_history, episodes = [], []
 
     class Progress(BaseCallback):
+        def __init__(self):
+            super().__init__()
+            self.window, self.episode_reward, self.episode_steps = [], 0.0, 0
+
+        def snapshot(self):
+            publish(progress, {"phase": "training", "steps": self.num_timesteps, "requested_steps": request.timesteps, "training_history": training_history[-200:], "episodes": episodes[-200:]})
+
         def _on_step(self):
+            reward = float(self.locals["rewards"][0])
+            self.window.append(reward)
+            self.episode_reward += reward
+            self.episode_steps += 1
+            if bool(self.locals["dones"][0]):
+                episodes.append({"step": self.num_timesteps, "episode_return": float(np.expm1(self.episode_reward)), "length": self.episode_steps})
+                self.episode_reward, self.episode_steps = 0.0, 0
             if self.num_timesteps % 100 == 0:
+                training_history.append({"step": self.num_timesteps, "mean_step_reward": float(np.mean(self.window)), "window_steps": len(self.window)})
+                self.window = []
                 progress(
                     min(0.8, 0.8 * self.num_timesteps / request.timesteps),
                     f"Training {self.num_timesteps} steps",
                 )
+                self.snapshot()
             return True
+
+        def _on_training_end(self):
+            if self.window:
+                training_history.append({"step": self.num_timesteps, "mean_step_reward": float(np.mean(self.window)), "window_steps": len(self.window)})
+            self.snapshot()
 
     algorithm = DDPG if request.algorithm == "DDPG" else PPO
     kwargs = (
@@ -208,6 +233,9 @@ def train(request, dataset, runtime, progress=lambda *_: None):
         "timesteps": model.num_timesteps,
         "requested_timesteps": request.timesteps,
         "training_updates": model._n_updates,
+        "training_history": training_history,
+        "training_episodes": episodes,
+        "training_metric_scope": "Mean log portfolio return per environment step, sampled in windows of up to 100 steps on training data only. Episode returns compound those same rewards. Training reward is not held-out performance.",
         "training_update_definition": "Stable-Baselines3 update counter: PPO optimization epochs; DDPG gradient steps",
         "parameter_sha256": parameters.hexdigest(),
         "checkpoint_sha256": sha256(
@@ -235,9 +263,17 @@ def train(request, dataset, runtime, progress=lambda *_: None):
     progress(0.85, "Evaluating held-out data against simple strategies")
     evaluated = run(dataset, strategy, evaluation_config, policy=policy)
     comparisons = {}
+    curves = {"policy": evaluated["state"]["equity"], "benchmark": evaluated["benchmark_curve"]}
     for template in ("buy_hold", "sma", "momentum"):
         simple = Strategy(name=template, type=template, symbols=request.symbols)
-        comparisons[template] = run(dataset, simple, evaluation_config)["metrics"]
+        comparison = run(dataset, simple, evaluation_config)
+        comparisons[template] = comparison["metrics"]
+        curves[template] = comparison["state"]["equity"]
+    # Retain real sampled valuations for charts without duplicating enormous intraday audit logs.
+    def sample_curve(curve):
+        stride = max(1, int(np.ceil((len(curve) - 1) / 999)))
+        sampled = curve[::stride]
+        return sampled if sampled[-1] == curve[-1] else sampled + [curve[-1]]
     record["evaluation"] = {
         "policy": evaluated["metrics"],
         "comparisons": comparisons,
@@ -245,6 +281,9 @@ def train(request, dataset, runtime, progress=lambda *_: None):
         "period": evaluated["period"],
         "partitions": evaluated["partitions"],
         "execution_assumptions": evaluated["execution_assumptions"],
+        "curves": {name: sample_curve(curve) for name, curve in curves.items()},
+        "curve_scope": "Up to 1000 sampled actual valuations per series, including endpoints. Policy and templates share test dates and execution costs; the benchmark excludes simulated trading costs.",
+        "benchmark": evaluated["benchmark_metrics"],
     }
     progress(1, "Training and held-out evaluation complete")
     return record

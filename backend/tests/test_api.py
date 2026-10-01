@@ -1,4 +1,5 @@
 from dataclasses import replace
+import json
 import time
 from datetime import datetime, timezone
 
@@ -51,6 +52,7 @@ def test_end_to_end_research(client, monkeypatch):
         raise httpx.ConnectError("No Ollama in test")
 
     monkeypatch.setattr(httpx, "post", offline)
+    monkeypatch.setattr(httpx, "stream", offline)
     d = client.post("/api/v1/demo").json()
     assert client.get("/api/v1/market").json()[0]["fixture"]
     risk = wait(
@@ -351,8 +353,17 @@ def test_agent_tool_validation_citations_and_no_hosted_calls(tmp_path, monkeypat
     requests = []
 
     class Reply:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
         def raise_for_status(self):
             pass
+
+        def iter_lines(self):
+            yield json.dumps({**self.json(), "done": True})
 
         def json(self):
             return (
@@ -387,7 +398,7 @@ def test_agent_tool_validation_citations_and_no_hosted_calls(tmp_path, monkeypat
         requests.append(kwargs["json"])
         return Reply()
 
-    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(httpx, "stream", lambda method, url, **kwargs: post(url, **kwargs))
     called = []
     agent = LocalAgent(
         settings,

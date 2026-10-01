@@ -33,6 +33,7 @@ class Jobs:
             redis_url,
         )
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="quantara")
+        self.chat_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="quantara-chat")
 
     def submit(self, operation, arguments, owner):
         job = self.store.create(
@@ -48,6 +49,7 @@ class Jobs:
                 "updated_at": now(),
                 "result": None,
                 "error": None,
+                "details": {},
             },
         )
         if self.backend == "celery":
@@ -55,7 +57,7 @@ class Jobs:
 
             celery_app.send_task("quantara.execute", args=[job["id"], owner])
         else:
-            self.executor.submit(self.execute, job["id"], owner)
+            (self.chat_executor if operation == "chat" else self.executor).submit(self.execute, job["id"], owner)
         return job
 
     def execute(self, identifier, owner):
@@ -74,6 +76,14 @@ class Jobs:
                 saved.update(
                     progress=float(fraction), message=message, updated_at=now()
                 )
+
+        def snapshot(details):
+            with self.store.edit("job", identifier, owner) as saved:
+                if saved["status"] != "running" or saved.get("attempt") != attempt:
+                    raise Cancelled()
+                saved.update(details=details, updated_at=now())
+
+        progress.snapshot = snapshot
 
         try:
             token = current_job.set(identifier)
@@ -114,6 +124,7 @@ class Jobs:
                 status="queued",
                 error=None,
                 message="Queued for retry",
+                    details={},
                 updated_at=now(),
             )
         if self.backend == "celery":
@@ -121,7 +132,7 @@ class Jobs:
 
             celery_app.send_task("quantara.execute", args=[identifier, owner])
         else:
-            self.executor.submit(self.execute, identifier, owner)
+            (self.chat_executor if job["operation"] == "chat" else self.executor).submit(self.execute, identifier, owner)
         return self.store.get("job", identifier, owner)
 
     def recover_stale(self, owner, seconds=900):
@@ -152,3 +163,4 @@ class Jobs:
 
     def close(self):
         self.executor.shutdown(wait=False, cancel_futures=True)
+        self.chat_executor.shutdown(wait=False, cancel_futures=True)

@@ -1685,17 +1685,39 @@
       "get": {
         "summary": "Job List",
         "operationId": "job_list_api_v1_jobs_get",
+        "parameters": [
+          {
+            "name": "include_results",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Results"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/JobView"
                   },
-                  "type": "array",
                   "title": "Response Job List Api V1 Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1832,6 +1854,16 @@
             "schema": {
               "type": "string",
               "title": "Identifier"
+            }
+          },
+          {
+            "name": "include_results",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Results"
             }
           }
         ],
@@ -2649,6 +2681,11 @@
               }
             ],
             "title": "Attempt"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
           }
         },
         "additionalProperties": false,

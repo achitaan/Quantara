@@ -1447,3 +1447,97 @@ select option {
     scroll-behavior: auto !important;
   }
 }
+
+/* Research plots share the glass surfaces and support keyboard inspection. */
+.chart-tabs,
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.chart-tabs button,
+.chart-legend button {
+  padding: 7px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chart-tabs button[aria-pressed="true"],
+.chart-legend button[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--purple);
+}
+.chart-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 7px;
+}
+.chart-inspector {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.chart-inspector input {
+  width: 100%;
+  accent-color: var(--purple);
+}
+.research-chart .metric-strip {
+  margin-top: 14px;
+}
+.training-charts > h3 {
+  margin-top: 32px;
+}
+.rag-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 8px;
+}
+.rag-toggle input {
+  width: auto;
+  accent-color: var(--purple);
+}
+.reply-meta {
+  display: block;
+  margin-top: 16px;
+}
+.message > small {
+  display: block;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+.source-excerpt {
+  margin: 12px 0;
+  padding: 12px;
+  border-left: 2px solid var(--purple);
+  background: var(--panel);
+}
+.source-excerpt p {
+  font-size: 12px;
+}
+.streaming-reply {
+  border: 1px dashed var(--purple);
+}
+.research-chart svg {
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+@media (max-width: 760px) {
+  .chart-inspector {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .chart-title {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

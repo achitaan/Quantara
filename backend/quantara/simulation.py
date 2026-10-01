@@ -9,6 +9,7 @@ import pandas as pd
 
 from .analytics import optimize, performance
 from .market import aligned_prices, validate_sessions, version
+from .telemetry import publish
 
 ENGINE_VERSION = 2
 EXECUTION_ASSUMPTIONS = {
@@ -335,6 +336,13 @@ def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=Non
         )
         if i % max(1, len(grouped) // 100) == 0:
             progress((i + 1) / len(grouped), f"Executed {i + 1}/{len(grouped)} bars")
+            if hasattr(progress, "snapshot"):
+                equity = state["equity"]
+                stride = max(1, math.ceil(len(equity) / 199))
+                sampled = equity[::stride]
+                if sampled[-1] != equity[-1]:
+                    sampled = sampled + [equity[-1]]
+                publish(progress, {"phase": "backtest", "bars_executed": i + 1, "total_bars": len(grouped), "equity": deepcopy(sampled)})
     curve = pd.Series(
         [v["equity"] for v in state["equity"]],
         index=pd.to_datetime([v["timestamp"] for v in state["equity"]], utc=True),

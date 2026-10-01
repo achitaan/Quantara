@@ -108,6 +108,7 @@ def main(url, ollama_url, output):
                     "arguments_valid": all("error" not in t for t in tools),
                     "explanation_available": value["mode"] == "explanation",
                     "warning": value["warning"],
+                    "timing": value.get("timing"),
                     "citation_validation": value.get("citation_validation"),
                     "source_citation_present": bool(cited),
                     "expected_document_cited": case["citation"] in cited

@@ -15,6 +15,8 @@ class Settings:
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
     llm_model: str = os.getenv("LLM_MODEL", "qwen3.5:4b")
     llm_timeout: float = float(os.getenv("LLM_TIMEOUT", "180"))
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "600"))
+    llm_keep_alive: str = os.getenv("LLM_KEEP_ALIVE", "30m")
     ollama_url: str = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
     embedding_model: str = os.getenv(
         "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
