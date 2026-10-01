@@ -32,7 +32,8 @@ export default defineConfig({
         DATABASE_URL: "sqlite:///./runtime/e2e-" + process.pid + ".db",
         DEMO_MODE: "true",
         LLM_PROVIDER: "ollama",
-        OLLAMA_URL: "http://127.0.0.1:11434",
+        // Exercise model-outage usability deterministically; real Qwen has a separate benchmark.
+        OLLAMA_URL: "http://127.0.0.1:11435",
         ALLOWED_ORIGINS: "http://127.0.0.1:3101,http://localhost:3101",
       },
     },

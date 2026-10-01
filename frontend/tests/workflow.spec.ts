@@ -111,6 +111,9 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
   await expect(page.locator(".message.assistant")).toBeVisible({
     timeout: 30000,
   });
+  await expect(page.locator(".message.assistant")).toContainText(
+    "calculations run independently",
+  );
   expect(errors).toEqual([]);
 });
 
@@ -129,4 +132,60 @@ test("mobile navigation and safe text rendering", async ({ page }) => {
     page.getByRole("heading", { name: "Research assistant", exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "../runtime/mobile.png", fullPage: true });
+});
+
+test("appearance persists across reloads and preserves the watchlist", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enter workspace" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your research, connected." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Switch to (light|dark) mode/ }),
+  ).toBeEnabled();
+  const before = (await (await page.request.get("/api/settings")).json())
+    .watchlist;
+  const light = page.getByRole("button", { name: "Switch to light mode" });
+  if (await light.isVisible()) await light.click();
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get("/api/settings")).json()).theme,
+    )
+    .toBe("light");
+  await page.screenshot({ path: "../runtime/glass-light.png", fullPage: true });
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get("/api/settings")).json()).theme,
+    )
+    .toBe("dark");
+  await page.screenshot({ path: "../runtime/glass-dark.png", fullPage: true });
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Switch to light mode" }),
+  ).toBeVisible();
+  expect(
+    (await (await page.request.get("/api/settings")).json()).watchlist,
+  ).toEqual(before);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get("/api/settings")).json()).theme,
+    )
+    .toBe("light");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBeTruthy();
+  await page.screenshot({
+    path: "../runtime/glass-mobile.png",
+    fullPage: true,
+  });
 });

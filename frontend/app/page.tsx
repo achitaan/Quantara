@@ -54,6 +54,46 @@ const methods = [
 ];
 const label = (s: string) =>
   s.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
+function ThemeSwitch({
+  theme,
+  onChange,
+  disabled = false,
+}: {
+  theme: "light" | "dark";
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  const next = theme === "light" ? "dark" : "light";
+  return (
+    <button
+      className="theme-toggle"
+      type="button"
+      onClick={onChange}
+      disabled={disabled}
+      aria-label={"Switch to " + next + " mode"}
+      title={"Switch to " + next + " mode"}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        aria-hidden
+      >
+        {next === "dark" ? (
+          <path d="M20.6 13.2A8.8 8.8 0 0 1 10.8 3.4a8.8 8.8 0 1 0 9.8 9.8Z" />
+        ) : (
+          <>
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5" />
+          </>
+        )}
+      </svg>
+      <span className="theme-label">{label(next)} mode</span>
+    </button>
+  );
+}
 function Icon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     Overview: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
@@ -234,8 +274,8 @@ function Chart({
       >
         <defs>
           <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#a78bfa" stopOpacity=".25" />
-            <stop offset="1" stopColor="#a78bfa" stopOpacity="0" />
+            <stop offset="0" stopColor="var(--purple)" stopOpacity=".25" />
+            <stop offset="1" stopColor="var(--purple)" stopOpacity="0" />
           </linearGradient>
         </defs>
         {[0, 0.5, 1].map((v) => (
@@ -245,20 +285,26 @@ function Chart({
               x2="728"
               y1={225 - v * 190}
               y2={225 - v * 190}
-              stroke="#292b3a"
+              stroke="var(--line)"
               strokeDasharray="4 6"
             />
-            <text x="0" y={230 - v * 190} fill="#8d91a6" fontSize="11">
+            <text x="0" y={230 - v * 190} fill="var(--muted)" fontSize="11">
               {money(min + v * range)}
             </text>
           </g>
         ))}
         <path d={path + " L728,225 L58,225 Z"} fill="url(#area)" />
-        <path d={path} fill="none" stroke="#a78bfa" strokeWidth="2.5" />
-        <text x="58" y="255" fill="#8d91a6" fontSize="11">
+        <path d={path} fill="none" stroke="var(--purple)" strokeWidth="2.5" />
+        <text x="58" y="255" fill="var(--muted)" fontSize="11">
           {text(data[0].timestamp ?? data[0].date).slice(0, 10)}
         </text>
-        <text x="728" y="255" textAnchor="end" fill="#8d91a6" fontSize="11">
+        <text
+          x="728"
+          y="255"
+          textAnchor="end"
+          fill="var(--muted)"
+          fontSize="11"
+        >
           {text(data.at(-1)?.timestamp ?? data.at(-1)?.date).slice(0, 10)}
         </text>
       </svg>
@@ -463,7 +509,52 @@ export default function Workspace() {
   const [preferences, setPreferences] = useState<{
     watchlist: string[];
     theme: "dark" | "light";
-  }>({ watchlist: [], theme: "dark" });
+  }>({ watchlist: [], theme: "light" });
+  const [themeReady, setThemeReady] = useState(false);
+  const [savingTheme, setSavingTheme] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("quantara-theme");
+      if (stored === "light" || stored === "dark")
+        setPreferences((v) => ({ ...v, theme: stored }));
+    } catch {
+      /* Appearance also works when browser storage is unavailable. */
+    }
+    setThemeReady(true);
+  }, []);
+  useEffect(() => {
+    if (!themeReady) return;
+    document.documentElement.dataset.theme = preferences.theme;
+    try {
+      localStorage.setItem("quantara-theme", preferences.theme);
+    } catch {
+      /* Optional browser cache. */
+    }
+  }, [preferences.theme, themeReady]);
+  async function toggleTheme() {
+    const previous = preferences;
+    const next = {
+      watchlist: preferences.watchlist,
+      theme:
+        preferences.theme === "light" ? ("dark" as const) : ("light" as const),
+    };
+    setPreferences(next);
+    if (!user) return;
+    setSavingTheme(true);
+    setBusy(true);
+    try {
+      const saved = await api<typeof next>("settings", next, "PUT");
+      setPreferences({ watchlist: saved.watchlist, theme: saved.theme });
+    } catch (e) {
+      setPreferences(previous);
+      setError(
+        e instanceof Error ? e.message : "Appearance could not be saved.",
+      );
+    } finally {
+      setSavingTheme(false);
+      setBusy(false);
+    }
+  }
   const refresh = useCallback(async () => {
     const [p, d, s, b, a, n, m, r, j, doc, c, cb, h, prefs] = await Promise.all(
       [
@@ -693,10 +784,16 @@ export default function Workspace() {
   if (!user)
     return (
       <main className="login">
+        <div className="login-theme">
+          <ThemeSwitch
+            theme={preferences.theme}
+            onChange={() => void toggleTheme()}
+          />
+        </div>
         <div className="login-card">
           <div className="brand">
             <b>Q</b>
-            <span>QUANTARA</span>
+            <span>Quantara</span>
           </div>
           <p className="eyebrow">LOCAL-FIRST RESEARCH</p>
           <h1>
@@ -769,7 +866,7 @@ export default function Workspace() {
         <div className="brand">
           <b>Q</b>
           <span>
-            QUANTARA<small>RESEARCH WORKSPACE</small>
+            Quantara<small>RESEARCH WORKSPACE</small>
           </span>
         </div>
         <p className="nav-caption">WORKSPACE</p>
@@ -825,6 +922,11 @@ export default function Workspace() {
           </div>
           <div className="top-actions">
             <span className="tag">VIRTUAL ORDERS ONLY</span>
+            <ThemeSwitch
+              theme={preferences.theme}
+              onChange={() => void toggleTheme()}
+              disabled={savingTheme || busy}
+            />
             <button
               className="quiet"
               disabled={busy}
