@@ -4,6 +4,12 @@ test("assistant shows a streamed preview and then cited document evidence", asyn
   page,
 }) => {
   await page.goto("/");
+  await page
+    .getByRole("textbox", { name: "Username", exact: true })
+    .fill("demo");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(
     page.getByRole("heading", { name: "Your research, connected." }),

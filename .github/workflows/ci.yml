@@ -3,15 +3,6 @@ on: [push, pull_request]
 jobs:
   core:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: quantara
-          POSTGRES_USER: quantara
-          POSTGRES_PASSWORD: test-password
-        ports: ["5432:5432"]
-        options: --health-cmd "pg_isready -U quantara" --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,10 +20,21 @@ jobs:
             cache-dependency-path: frontend/package-lock.json,
           }
       - run: pip install -r backend/requirements.txt
+      - name: Start PostgreSQL with an ephemeral password
+        run: |
+          export POSTGRES_PASSWORD=$(openssl rand -hex 32)
+          echo "::add-mask::$POSTGRES_PASSWORD"
+          echo "TEST_POSTGRES_URL=postgresql+psycopg://quantara:$POSTGRES_PASSWORD@localhost:5432/quantara" >> "$GITHUB_ENV"
+          docker run -d --name quantara-test-postgres \
+            -e POSTGRES_DB=quantara -e POSTGRES_USER=quantara -e POSTGRES_PASSWORD \
+            -p 127.0.0.1:5432:5432 postgres:16-alpine
+          for attempt in $(seq 1 30); do
+            if docker exec quantara-test-postgres pg_isready -h 127.0.0.1 -U quantara; then exit 0; fi
+            sleep 2
+          done
+          exit 1
       - run: python -m ruff check backend/quantara backend/tests scripts
       - run: python -m pytest
-        env:
-          TEST_POSTGRES_URL: postgresql+psycopg://quantara:test-password@localhost:5432/quantara
       - run: python scripts/export_openapi.py
       - run: npm ci && npm run types && npm run typecheck && npm run build
         working-directory: frontend
@@ -41,7 +43,14 @@ jobs:
         working-directory: frontend
       - run: npm run test:e2e
         working-directory: frontend
-      - run: docker compose config --quiet
+      - name: Validate Compose with ephemeral credentials
+        run: |
+          export POSTGRES_PASSWORD=$(openssl rand -hex 32)
+          export TEAM_PASSWORD=$(openssl rand -hex 32)
+          docker compose config --quiet
+      - name: Stop test PostgreSQL
+        if: always()
+        run: docker rm -f quantara-test-postgres
       - uses: actions/upload-artifact@v4
         if: failure()
         with: { name: browser-test-results, path: frontend/test-results }

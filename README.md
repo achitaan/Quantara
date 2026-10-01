@@ -80,7 +80,7 @@ Prerequisites: **Python 3.12** and **Node.js 22**. From the repository root on W
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-Copy-Item backend\.env.example .env
+.\.venv\Scripts\python.exe scripts\setup_local.py
 .\.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
@@ -95,7 +95,7 @@ npm run dev -- --port 3100
 
 - Application: [http://127.0.0.1:3100](http://127.0.0.1:3100)
 - API documentation: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- Demo credentials: `demo` / `quantara-local-demo`
+- Sign in as `demo` using the private `TEAM_PASSWORD` generated in your ignored `.env` file. The password is not prefilled in the browser.
 
 Select **Load research demo** to populate explicitly labeled synthetic history. Local data, downloaded weights, and checkpoints are stored under the ignored `runtime/` directory.
 
@@ -140,6 +140,8 @@ Embedding weights are downloaded explicitly once. Retrieval subsequently loads t
 
 ### Docker and team configuration
 
+Generate the private `.env` credentials with `scripts/setup_local.py` before starting Compose. Existing installations can rotate their native login with `--rotate-login`; this revokes existing sessions. Changing an initialized PostgreSQL volume requires changing its database role password separately.
+
 ```sh
 docker compose up --build
 # Include the local AI service:
@@ -153,7 +155,7 @@ Compose defines PostgreSQL, Redis, the API, Celery worker/scheduler, and the fro
 docker compose exec api python -c "from quantara.config import settings; from sentence_transformers import SentenceTransformer; SentenceTransformer(settings.embedding_model, device='cpu')"
 ```
 
-For team use, configure `DEMO_MODE=false`, `TEAM_USERNAME`, `TEAM_PASSWORD`, and a nondefault `POSTGRES_PASSWORD`. Additional native users can be created with `scripts/team_user.py`. Passwords are hashed; sessions use HttpOnly cookies; ownership and request origins are checked. Configure `COOKIE_SECURE=true` and `ALLOWED_ORIGINS` for HTTPS.
+For team use, configure `DEMO_MODE=false`, `TEAM_USERNAME`, `TEAM_PASSWORD`, and a private `POSTGRES_PASSWORD`. Additional native users can be created with `scripts/team_user.py`. Passwords are hashed; sessions use HttpOnly cookies; ownership and request origins are checked. Configure `COOKIE_SECURE=true` and `ALLOWED_ORIGINS` for HTTPS.
 
 Full Compose/Redis/Celery startup remains an environment acceptance item; native verification does not establish container deployment readiness.
 

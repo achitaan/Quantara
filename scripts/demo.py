@@ -1,6 +1,10 @@
 """Automated, offline-first demonstration; saves every step and the final transcript."""
 
 import argparse
+from getpass import getpass
+import os
+
+from dotenv import load_dotenv
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -150,8 +154,8 @@ def run(url, username, password, include_models=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:8000")
-    parser.add_argument("--username", default="demo")
-    parser.add_argument("--password", default="quantara-local-demo")
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    parser.add_argument("--username", default=os.getenv("TEAM_USERNAME", "demo"))
     parser.add_argument("--output", default="runtime/demo-report.json")
     parser.add_argument(
         "--include-models",
@@ -159,7 +163,12 @@ if __name__ == "__main__":
         help="Run installed local forecasts and brief RL training; no performance claim",
     )
     args = parser.parse_args()
-    result = run(args.url, args.username, args.password, args.include_models)
+    result = run(
+        args.url,
+        args.username,
+        os.getenv("TEAM_PASSWORD") or getpass("Password: "),
+        args.include_models,
+    )
     target = Path(args.output)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(result, indent=2), encoding="utf-8")

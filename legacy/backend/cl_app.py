@@ -63,7 +63,7 @@ class CacheConfig:
     postgres_port: int = 5432
     postgres_db: str = "quantara"
     postgres_user: str = "root"
-    postgres_password: str = "1412"
+    postgres_password: str = os.getenv("POSTGRES_PASSWORD", "")
     postgres_schema: str = "cache"
     
     # Connection pool settings
@@ -1592,8 +1592,10 @@ langgraph_app   = workflow.compile(checkpointer=memory)
 # ── Chainlit auth (unchanged) ────────────────────────────────────────────────
 @cl.password_auth_callback
 def auth_callback(username, password):
-    if (username, password) == ("admin", "admin"):
-        return cl.User(identifier="admin", metadata={"role": "admin"})
+    if (os.getenv("TEAM_USERNAME") and os.getenv("TEAM_PASSWORD")
+            and username == os.getenv("TEAM_USERNAME")
+            and password == os.getenv("TEAM_PASSWORD")):
+        return cl.User(identifier=username, metadata={"role": "admin"})
     return None
 
 from rag.qa_chain import make_chain

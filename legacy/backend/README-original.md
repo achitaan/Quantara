@@ -8,7 +8,7 @@
 
    ```sql
    CREATE DATABASE quantara;
-   CREATE USER root WITH PASSWORD 'your_password';
+   -- Supply a private password interactively; do not commit it.
    GRANT ALL PRIVILEGES ON DATABASE quantara TO root;
    ```
 
@@ -52,8 +52,8 @@
    In your `.env` file, set:
 
    ```
-   DATABASE_URL=postgresql://root:your_password@localhost:5432/quantara
-   CHAINLIT_AUTH_SECRET=your_super_secret_key
+   DATABASE_URL=<set privately in your ignored .env>
+   CHAINLIT_AUTH_SECRET=<generate privately>
    ```
 
 6. **Troubleshooting**  

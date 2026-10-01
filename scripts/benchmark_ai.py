@@ -1,6 +1,10 @@
 """Real Ollama evaluation; records latency, model residency and tool/citation validity."""
 
 import argparse
+from getpass import getpass
+import os
+
+from dotenv import load_dotenv
 import json
 import re
 from pathlib import Path
@@ -11,10 +15,15 @@ import httpx
 
 
 def main(url, ollama_url, output):
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    credential = os.getenv("TEAM_PASSWORD") or getpass("Password: ")
     with httpx.Client(base_url=url, timeout=150) as client:
         response = client.post(
             "/api/v1/auth/login",
-            json={"username": "demo", "password": "quantara-local-demo"},
+            json={
+                "username": os.getenv("TEAM_USERNAME", "demo"),
+                "password": credential,
+            },
         )
         response.raise_for_status()
         health = client.get("/api/v1/health").json()

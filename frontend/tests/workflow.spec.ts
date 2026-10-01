@@ -6,6 +6,12 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
+  await page
+    .getByRole("textbox", { name: "Username", exact: true })
+    .fill("demo");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(
     page.getByRole("heading", { name: "Your research, connected." }),
@@ -157,6 +163,12 @@ test("training charts expose recorded rewards and untouched test comparisons", a
     "Real training requires the optional local model runtime.",
   );
   await page.goto("/");
+  await page
+    .getByRole("textbox", { name: "Username", exact: true })
+    .fill("demo");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(
     page.getByRole("heading", { name: "Your research, connected." }),
@@ -211,6 +223,12 @@ test("training charts expose recorded rewards and untouched test comparisons", a
 test("mobile navigation and safe text rendering", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  await page
+    .getByRole("textbox", { name: "Username", exact: true })
+    .fill("demo");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(
     page.getByRole("heading", { name: "Your research, connected." }),
@@ -229,6 +247,12 @@ test("appearance persists across reloads and preserves the watchlist", async ({
   page,
 }) => {
   await page.goto("/");
+  await page
+    .getByRole("textbox", { name: "Username", exact: true })
+    .fill("demo");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(
     page.getByRole("heading", { name: "Your research, connected." }),

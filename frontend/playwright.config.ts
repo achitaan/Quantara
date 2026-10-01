@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
+// Each browser run uses its own credential, never a repository default.
+process.env.TEAM_PASSWORD ||= randomBytes(24).toString("hex");
 const root = path.resolve(__dirname, "..");
 const python =
   process.env.PYTHON ||
@@ -31,6 +34,8 @@ export default defineConfig({
       env: {
         DATABASE_URL: "sqlite:///./runtime/e2e-" + process.pid + ".db",
         DEMO_MODE: "true",
+        TEAM_USERNAME: "demo",
+        TEAM_PASSWORD: process.env.TEAM_PASSWORD!,
         LLM_PROVIDER: "ollama",
         // Exercise model-outage usability deterministically; real Qwen has a separate benchmark.
         OLLAMA_URL: "http://127.0.0.1:11435",

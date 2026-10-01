@@ -951,12 +951,7 @@ export default function Workspace() {
             }}
           >
             <Field name="username" title="Username" value="demo" />
-            <Field
-              name="password"
-              title="Password"
-              type="password"
-              value="quantara-local-demo"
-            />
+            <Field name="password" title="Password" type="password" value="" />
             {error && (
               <p role="alert" className="error">
                 {error}
@@ -966,10 +961,7 @@ export default function Workspace() {
               {busy ? "Signing in…" : "Enter workspace →"}
             </button>
           </form>
-          <small>
-            Local demo account. Configure team credentials before sharing
-            access.
-          </small>
+          <small>Use the credentials generated in your local .env file.</small>
         </div>
         <div className="login-art">
           <span className="orbit one" />

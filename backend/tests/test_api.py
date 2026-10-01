@@ -1,5 +1,7 @@
 from dataclasses import replace
 import json
+import os
+import secrets
 import time
 from datetime import datetime, timezone
 
@@ -28,7 +30,7 @@ def client(tmp_path):
         assert (
             c.post(
                 "/api/v1/auth/login",
-                json={"username": "demo", "password": "quantara-local-demo"},
+                json={"username": "demo", "password": os.environ["TEAM_PASSWORD"]},
             ).status_code
             == 200
         )
@@ -139,13 +141,14 @@ def test_end_to_end_research(client, monkeypatch):
 
 def test_auth_ownership_and_csrf(client):
     d = client.post("/api/v1/demo").json()
-    client.app.state.store.team_user("other", "long-password")
+    other_credential = secrets.token_urlsafe(24)
+    client.app.state.store.team_user("other", other_credential)
     client.cookies.clear()
     assert client.get("/api/v1/market").status_code == 401
     assert (
         client.post(
             "/api/v1/auth/login",
-            json={"username": "other", "password": "long-password"},
+            json={"username": "other", "password": other_credential},
         ).status_code
         == 200
     )
@@ -398,7 +401,9 @@ def test_agent_tool_validation_citations_and_no_hosted_calls(tmp_path, monkeypat
         requests.append(kwargs["json"])
         return Reply()
 
-    monkeypatch.setattr(httpx, "stream", lambda method, url, **kwargs: post(url, **kwargs))
+    monkeypatch.setattr(
+        httpx, "stream", lambda method, url, **kwargs: post(url, **kwargs)
+    )
     called = []
     agent = LocalAgent(
         settings,

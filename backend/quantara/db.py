@@ -186,15 +186,30 @@ class Store:
             raise KeyError("Session expired")
         return value["username"]
 
+    def rotate_password(self, username, password):
+        """Replace an existing user's password and revoke that user's sessions."""
+        salt = secrets.token_hex(16)
+        digest = pbkdf2_hmac("sha256", password.encode(), salt.encode(), 600000).hex()
+        with self.lock, self.sessions.begin() as session:
+            row = session.get(Record, "user:" + username)
+            if not row or row.kind != "user":
+                raise KeyError("User not found")
+            row.payload = {**row.payload, "salt": salt, "digest": digest}
+            row.version += 1
+            for saved in session.scalars(
+                select(Record).where(Record.kind == "session")
+            ):
+                if saved.payload.get("username") == username:
+                    session.delete(saved)
+
     def seed_user(self, demo):
         username = os.getenv("TEAM_USERNAME", "demo" if demo else "")
-        password = os.getenv("TEAM_PASSWORD", "quantara-local-demo" if demo else "")
-        if not username or not password:
+        password = os.getenv("TEAM_PASSWORD", "")
+        if not username or len(password) < 12:
             raise ValueError(
-                "Configure TEAM_USERNAME and TEAM_PASSWORD when DEMO_MODE=false"
+                "Configure TEAM_USERNAME and TEAM_PASSWORD (at least 12 characters); "
+                "run scripts/setup_local.py for local credentials"
             )
-        if not demo and password == "quantara-local-demo":
-            raise ValueError("The demo password is forbidden outside demo mode")
         self.team_user(username, password)
 
 

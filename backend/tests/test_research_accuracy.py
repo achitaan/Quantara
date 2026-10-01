@@ -476,7 +476,9 @@ def test_real_training_reproducibility_future_isolation_and_checkpoint_integrity
         assert curve[0]["equity"] == request.capital
         assert curve[1]["timestamp"][:10] >= a["test_start"]
         assert curve[-1]["timestamp"] == a["evaluation"]["period"]["end"]
-    assert a["evaluation"]["curves"]["policy"][-1]["equity"] == pytest.approx(request.capital * (1 + a["evaluation"]["policy"]["total_return"]))
+    assert a["evaluation"]["curves"]["policy"][-1]["equity"] == pytest.approx(
+        request.capital * (1 + a["evaluation"]["policy"]["total_return"])
+    )
     path = tmp_path / "models" / (a["checkpoint"] + ".zip")
     path.write_bytes(path.read_bytes() + b"corrupted")
     with pytest.raises(ValueError, match="checksum"):
@@ -502,7 +504,7 @@ def test_training_job_and_policy_backtest_evaluation_scope(tmp_path):
     with TestClient(app) as client:
         client.post(
             "/api/v1/auth/login",
-            json={"username": "demo", "password": "quantara-local-demo"},
+            json={"username": "demo", "password": os.environ["TEAM_PASSWORD"]},
         ).raise_for_status()
         demo = client.post("/api/v1/demo").json()
 

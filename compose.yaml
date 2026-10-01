@@ -6,13 +6,13 @@ x-backend: &backend
     args:
       INSTALL_MODELS: ${INSTALL_MODELS:-false}
   environment: &environment
-    DATABASE_URL: postgresql+psycopg://quantara:${POSTGRES_PASSWORD:-quantara-local-db}@postgres:5432/quantara
+    DATABASE_URL: postgresql+psycopg://quantara:${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD with scripts/setup_local.py}@postgres:5432/quantara
     RUNTIME_DIR: /app/runtime
     REDIS_URL: redis://redis:6379/0
     TASK_BACKEND: celery
     DEMO_MODE: ${DEMO_MODE:-true}
     TEAM_USERNAME: ${TEAM_USERNAME:-demo}
-    TEAM_PASSWORD: ${TEAM_PASSWORD:-quantara-local-demo}
+    TEAM_PASSWORD: ${TEAM_PASSWORD:?Generate TEAM_PASSWORD with scripts/setup_local.py}
     LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
     LLM_MODEL: ${LLM_MODEL:-qwen3.5:4b}
     OLLAMA_URL: http://ollama:11434
@@ -37,7 +37,7 @@ services:
     environment:
       POSTGRES_DB: quantara
       POSTGRES_USER: quantara
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantara-local-db}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD with scripts/setup_local.py}
     volumes:
       - postgres:/var/lib/postgresql/data
     healthcheck:
