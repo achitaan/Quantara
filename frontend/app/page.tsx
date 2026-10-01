@@ -171,6 +171,48 @@ function Field({
     </label>
   );
 }
+function ExecutionCosts() {
+  return (
+    <>
+      <Field
+        name="commission"
+        title="Commission per fill"
+        type="number"
+        min={0}
+        step={0.01}
+        value={0}
+      />
+      <Field
+        name="slippage"
+        title="Slippage (basis points)"
+        type="number"
+        min={0}
+        max={1000}
+        step={0.1}
+        value={5}
+      />
+      <Field
+        name="spread"
+        title="Bid/ask spread (basis points)"
+        type="number"
+        min={0}
+        max={1000}
+        step={0.1}
+        value={0}
+      />
+      <Field
+        name="participation"
+        title="Maximum share of bar volume"
+        type="number"
+        min={0.000001}
+        max={1}
+        step="any"
+        value={0.01}
+      />
+      <Field name="benchmark" title="Benchmark symbol" value="SPY" />
+    </>
+  );
+}
 function Panel({
   title,
   subtitle,
@@ -315,8 +357,42 @@ function Result({ value }: { value: unknown }) {
   const obj = record(value);
   const metrics = record(obj.metrics ?? obj.risk ?? obj.evaluation ?? obj);
   const state = record(obj.state);
+  const modelEvaluation = record(obj.model_evaluation);
+  const changedCosts = modelEvaluation.cost_settings_changed;
   return (
     <div className="result">
+      {obj.metrics && state.equity && obj.engine_version !== 2 && (
+        <p className="notice">
+          This result was saved with an earlier simulator. Rerun it with the
+          corrected accounting engine.
+        </p>
+      )}
+      {obj.checkpoint && obj.observation_version !== 2 && (
+        <p className="notice">
+          Retrain this checkpoint to use the corrected share valuations.
+        </p>
+      )}
+      {obj.model_evaluation && (
+        <p className="notice">
+          {text(modelEvaluation.scope)}.{" "}
+          {Array.isArray(changedCosts) && changedCosts.length > 0
+            ? "Execution settings differ from training."
+            : ""}
+        </p>
+      )}
+      {obj.execution_assumptions && (
+        <details>
+          <summary>Execution assumptions</summary>
+          {Object.entries(record(obj.execution_assumptions)).map(
+            ([key, value]) => (
+              <p key={key}>
+                <strong>{label(key)}: </strong>
+                {text(value)}
+              </p>
+            ),
+          )}
+        </details>
+      )}
       {Object.keys(metrics).length > 0 && (
         <div className="metric-strip">
           {Object.entries(metrics)
@@ -1052,6 +1128,12 @@ export default function Workspace() {
                       : "Your first result starts with a question."
                   }
                 >
+                  {lastTest && lastTest.engine_version !== 2 && (
+                    <p className="notice">
+                      Earlier simulator result. Rerun this experiment with the
+                      corrected engine.
+                    </p>
+                  )}
                   <Chart data={lastEquity} />
                   {lastTest && (
                     <div className="metric-strip">
@@ -1059,7 +1141,13 @@ export default function Workspace() {
                         <div key={k}>
                           <small>{label(k)}</small>
                           <strong>
-                            {number(record(lastTest.metrics)[k]).toFixed(3)}
+                            {typeof record(lastTest.metrics)[k] === "number"
+                              ? k === "sharpe"
+                                ? number(record(lastTest.metrics)[k]).toFixed(3)
+                                : (
+                                    number(record(lastTest.metrics)[k]) * 100
+                                  ).toFixed(2) + "%"
+                              : "—"}
                           </strong>
                         </div>
                       ))}
@@ -1597,7 +1685,11 @@ export default function Workspace() {
                       { value: "", label: "No policy" },
                       ...models.map((m) => ({
                         value: m.id,
-                        label: text(m.name),
+                        label:
+                          text(m.name) +
+                          (m.observation_version !== 2
+                            ? " · Retrain required"
+                            : ""),
                       })),
                     ]}
                   />
@@ -1623,6 +1715,7 @@ export default function Workspace() {
                       capital: num(d, "capital"),
                       commission: num(d, "commission"),
                       slippage_bps: num(d, "slippage"),
+                      spread_bps: num(d, "spread"),
                       participation: num(d, "participation"),
                       benchmark: get(d, "benchmark"),
                       evaluation: get(d, "evaluation"),
@@ -1663,6 +1756,15 @@ export default function Workspace() {
                     value={5}
                   />
                   <Field
+                    name="spread"
+                    title="Bid/ask spread (basis points)"
+                    type="number"
+                    min={0}
+                    max={1000}
+                    step={0.1}
+                    value={0}
+                  />
+                  <Field
                     name="participation"
                     title="Maximum share of bar volume"
                     type="number"
@@ -1690,7 +1792,8 @@ export default function Workspace() {
                 </form>
                 <small>
                   Chronological split: 60% training, 20% validation, 20% test.
-                  Walk-forward uses fixed rules and rolling past-only windows.
+                  Walk-forward summarizes consecutive test windows using fixed
+                  rules, without retraining.
                 </small>
               </Panel>
               <Panel title="Saved experiments">
@@ -1703,6 +1806,7 @@ export default function Workspace() {
                         <small>
                           {b.fixture ? "Synthetic fixture" : text(b.source)} ·{" "}
                           {text(b.evaluation)}
+                          {b.engine_version !== 2 && " · Rerun required"}
                         </small>
                       </span>
                       <b>
@@ -1740,6 +1844,11 @@ export default function Workspace() {
                         dataset_id: get(d, "dataset_id"),
                         strategy_id: get(d, "strategy_id"),
                         capital: num(d, "capital"),
+                        commission: num(d, "commission"),
+                        slippage_bps: num(d, "slippage"),
+                        spread_bps: num(d, "spread"),
+                        participation: num(d, "participation"),
+                        benchmark: get(d, "benchmark"),
                       },
                     }),
                   )}
@@ -1776,6 +1885,7 @@ export default function Workspace() {
                     min={1}
                     value={100000}
                   />
+                  <ExecutionCosts />
                   <button className="primary" disabled={busy}>
                     Create account
                   </button>
@@ -2187,6 +2297,12 @@ export default function Workspace() {
                       algorithm: get(d, "algorithm"),
                       timesteps: num(d, "steps"),
                       seed: num(d, "seed"),
+                      capital: num(d, "capital"),
+                      commission: num(d, "commission"),
+                      slippage_bps: num(d, "slippage"),
+                      spread_bps: num(d, "spread"),
+                      participation: num(d, "participation"),
+                      benchmark: get(d, "benchmark"),
                     }),
                   )}
                 >
@@ -2220,6 +2336,14 @@ export default function Workspace() {
                     min={0}
                     value={42}
                   />
+                  <Field
+                    name="capital"
+                    title="Initial USD capital"
+                    type="number"
+                    min={1}
+                    value={100000}
+                  />
+                  <ExecutionCosts />
                   <button className="primary" disabled={busy}>
                     Train and evaluate
                   </button>
@@ -2240,6 +2364,7 @@ export default function Workspace() {
                         <small>
                           Seed {number(m.seed)} · test starts{" "}
                           {text(m.test_start)}
+                          {m.observation_version !== 2 && " · Retrain required"}
                         </small>
                       </span>
                       <b>Inspect ↗</b>

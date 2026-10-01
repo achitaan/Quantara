@@ -6,6 +6,15 @@ from uuid import uuid4
 
 import numpy as np
 
+from .model_runtime import serialized_training
+
+
+@serialized_training
+def make_encoder(model):
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(model)
+
 
 def chunks(documents):
     result = []
@@ -33,12 +42,11 @@ class Retrieval:
 
     def rebuild(self, owner, documents):
         import faiss
-        from sentence_transformers import SentenceTransformer
 
         parts = chunks(documents)
         if not parts:
             raise ValueError("No documents to embed")
-        encoder = SentenceTransformer(self.model)
+        encoder = make_encoder(self.model)
         vectors = encoder.encode(
             [p["text"] for p in parts], normalize_embeddings=True
         ).astype(np.float32)
@@ -84,9 +92,8 @@ class Retrieval:
                     "Documents changed. Rebuild the local embedding index."
                 )
             import faiss
-            from sentence_transformers import SentenceTransformer
 
-            encoder = SentenceTransformer(self.model)
+            encoder = make_encoder(self.model)
             if (
                 getattr(encoder[0].auto_model.config, "_commit_hash", None)
                 != metadata["revision"]

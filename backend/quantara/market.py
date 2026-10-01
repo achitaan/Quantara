@@ -122,7 +122,9 @@ def return_frame(dataset):
                 value = float(price)
             else:
                 ratio, dividend = 1.0, 0.0
-                for action in dataset.actions:
+                for action in sorted(
+                    dataset.actions, key=lambda a: (a.timestamp, a.type != "split")
+                ):
                     if action.symbol == symbol and last_ts < action.timestamp <= ts:
                         if action.type == "split":
                             ratio *= action.amount

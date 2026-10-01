@@ -367,6 +367,13 @@ def create_app(settings=None, store=None):
         d = services.dataset(body.config.dataset_id, user)
         s = services.strategy(body.config.strategy_id, user)
         market.aligned_prices(d, s.symbols)
+        market.validate_sessions(d)
+        if body.mode == "replay":
+            simulation.execution_groups(d, body.config)
+        elif body.config.start or body.config.end or body.config.evaluation != "full":
+            raise ValueError(
+                "Forward accounts use arriving bars; date ranges and test partitions apply to replay only"
+            )
         if body.mode == "forward" and d.fixture:
             raise ValueError("Forward paper accounts require a real provider dataset")
         if body.mode == "forward" and "adjusted" in d.source:

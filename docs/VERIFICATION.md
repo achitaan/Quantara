@@ -3,6 +3,8 @@
 The desktop preview runs at http://127.0.0.1:3100 with the API at http://127.0.0.1:8200.
 Demo login: `demo / quantara-local-demo`. Data, model weights, checkpoints and full evaluation artifacts are kept in ignored `runtime/`.
 
+The subsequent [simulation and training accuracy audit](RESEARCH_ACCURACY.md) fixes execution/evaluation issues and records expanded tests and three-seed model results. Earlier policy checkpoints require retraining for observation version 2; earlier simulator reports should be rerun. The model figures below describe the earlier release demonstration.
+
 ## Automated checks
 
 - Final core suite: **30 passed, 4 optional-model/PostgreSQL tests skipped**. PostgreSQL migrations and concurrent locked updates also passed against an isolated native cluster. Checks cover numerical/accounting constraints, actions, missing bars/calendars, no-lookahead execution, partial fills, replay/restart/duplicates, ownership, CSV, migrations, tool/citation/outage guards and retry fencing.

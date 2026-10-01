@@ -1723,6 +1723,36 @@ export interface components {
              * @default 0.2
              */
             validation_fraction: number;
+            /**
+             * Capital
+             * @default 100000
+             */
+            capital: number;
+            /**
+             * Commission
+             * @default 0
+             */
+            commission: number;
+            /**
+             * Slippage Bps
+             * @default 5
+             */
+            slippage_bps: number;
+            /**
+             * Spread Bps
+             * @default 0
+             */
+            spread_bps: number;
+            /**
+             * Participation
+             * @default 0.01
+             */
+            participation: number;
+            /**
+             * Benchmark
+             * @default SPY
+             */
+            benchmark: string;
         };
         /** Transaction */
         Transaction: {

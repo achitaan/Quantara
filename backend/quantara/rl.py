@@ -1,18 +1,33 @@
 from pathlib import Path
 from uuid import uuid4
+from hashlib import sha256
+from importlib.metadata import version as package_version
 
 import numpy as np
 
-from .market import aligned_prices, version
+from .market import aligned_prices, validate_sessions, version
+from .model_runtime import serialized_training
 from .schemas import Backtest, Strategy
-from .simulation import execute, groups, initial_state, run, submit_targets
+from .simulation import (
+    ENGINE_VERSION,
+    execute,
+    groups,
+    initial_state,
+    run,
+    submit_targets,
+)
+
+OBSERVATION_VERSION = 2
 
 
 def observation(history, state, symbols):
     values = history[symbols].pct_change().fillna(0).to_numpy()[-10:]
     padded = np.zeros((10, len(symbols)))
     padded[-len(values) :] = np.clip(values, -1, 1)
-    last = history.iloc[-1]
+    # Features use total returns, but shares and cash must use contemporaneous raw prices.
+    last = state.get("marks", {})
+    if set(symbols) - set(last):
+        raise ValueError("RL observations require raw execution marks for every symbol")
     value = state["cash"] + sum(state["holdings"].get(s, 0) * last[s] for s in symbols)
     weights = [
         state["holdings"].get(s, 0) * last[s] / max(value, 1e-9) for s in symbols
@@ -23,7 +38,10 @@ def observation(history, state, symbols):
 
 
 def allocation(action, symbols):
-    values = np.clip(np.asarray(action, dtype=float), 0, 1)
+    values = np.asarray(action, dtype=float)
+    if values.shape != (len(symbols),) or not np.isfinite(values).all():
+        raise ValueError("Policy actions must contain one finite value per symbol")
+    values = np.clip(values, 0, 1)
     # Sum below one leaves cash; sum above one becomes fully invested.
     values /= max(1, values.sum())
     return dict(zip(symbols, map(float, values)))
@@ -31,6 +49,8 @@ def allocation(action, symbols):
 
 def make_environment(dataset, symbols, config):
     import gymnasium as gym
+
+    validate_sessions(dataset)
 
     class TradingEnv(gym.Env):
         metadata = {"render_modes": []}
@@ -51,11 +71,14 @@ def make_environment(dataset, symbols, config):
         def reset(self, seed=None, options=None):
             super().reset(seed=seed)
             self.state, self.cursor = initial_state(config.capital), 0
+            self.ended = False
             ts, bars = self.bars[0]
             execute(self.state, bars, ts, config, dataset.actions)
             return observation(self.frame.loc[:ts], self.state, symbols), {}
 
         def step(self, action):
+            if self.ended:
+                raise ValueError("Episode has ended; reset before stepping again")
             ts, bars = self.bars[self.cursor]
             before = self.state["equity"][-1]["equity"]
             submit_targets(
@@ -66,10 +89,11 @@ def make_environment(dataset, symbols, config):
             execute(self.state, bars, ts, config, dataset.actions)
             after = self.state["equity"][-1]["equity"]
             reward = float(np.log(max(after, 1e-9) / max(before, 1e-9)))
+            self.ended = self.cursor == len(self.bars) - 1
             return (
                 observation(self.frame.loc[:ts], self.state, symbols),
                 reward,
-                self.cursor == len(self.bars) - 1,
+                self.ended,
                 False,
                 {},
             )
@@ -77,12 +101,21 @@ def make_environment(dataset, symbols, config):
     return TradingEnv()
 
 
+@serialized_training
 def trained_policy(record, runtime):
-    from stable_baselines3 import DDPG, PPO
-
+    if record.get("observation_version") != OBSERVATION_VERSION:
+        raise ValueError(
+            "This policy uses obsolete accounting observations; retrain the model"
+        )
     path = Path(runtime) / "models" / (record["checkpoint"] + ".zip")
     if path.parent.resolve() != (Path(runtime) / "models").resolve():
         raise ValueError("Invalid checkpoint path")
+    if not path.is_file():
+        raise ValueError("Trained checkpoint is missing; retrain or restore the model")
+    if sha256(path.read_bytes()).hexdigest() != record.get("checkpoint_sha256"):
+        raise ValueError("Checkpoint checksum differs from the training record")
+    from stable_baselines3 import DDPG, PPO
+
     model = (DDPG if record["algorithm"] == "DDPG" else PPO).load(path, device="cpu")
     symbols = record["symbols"]
 
@@ -95,18 +128,23 @@ def trained_policy(record, runtime):
     return policy
 
 
+@serialized_training
 def train(request, dataset, runtime, progress=lambda *_: None):
     from stable_baselines3 import DDPG, PPO
     from stable_baselines3.common.callbacks import BaseCallback
     from stable_baselines3.common.utils import set_random_seed
+    import torch
 
+    validate_sessions(dataset)
+    aligned_prices(dataset, list(dict.fromkeys(request.symbols + [request.benchmark])))
+    torch.set_num_threads(1)
     set_random_seed(request.seed)
     sessions = sorted({b.timestamp.date() for b in dataset.bars})
     cut = max(1, int(len(sessions) * request.train_fraction))
     test_cut = int(
         len(sessions) * (request.train_fraction + request.validation_fraction)
     )
-    if cut < 3 or test_cut >= len(sessions) - 2:
+    if cut < 3 or test_cut <= cut or test_cut >= len(sessions) - 2:
         raise ValueError(
             "At least three sessions per training and test partition are required"
         )
@@ -123,6 +161,12 @@ def train(request, dataset, runtime, progress=lambda *_: None):
         strategy_id="training",
         train_fraction=request.train_fraction,
         validation_fraction=request.validation_fraction,
+        capital=request.capital,
+        commission=request.commission,
+        slippage_bps=request.slippage_bps,
+        spread_bps=request.spread_bps,
+        participation=request.participation,
+        benchmark=request.benchmark,
     )
     env = make_environment(train_data, request.symbols, config)
 
@@ -145,23 +189,42 @@ def train(request, dataset, runtime, progress=lambda *_: None):
         "MlpPolicy", env, seed=request.seed, verbose=0, device="cpu", **kwargs
     )
     model.learn(total_timesteps=request.timesteps, callback=Progress())
+    if not model._n_updates:
+        raise ValueError("Training did not perform a gradient update")
     directory = Path(runtime) / "models"
     directory.mkdir(parents=True, exist_ok=True)
     identifier = str(uuid4())
     model.save(directory / identifier)
+    parameters = sha256()
+    for name, tensor in sorted(model.policy.state_dict().items()):
+        parameters.update(name.encode())
+        parameters.update(tensor.detach().cpu().numpy().tobytes())
     record = {
         "name": f"{request.algorithm} seed {request.seed}",
         "algorithm": request.algorithm,
         "checkpoint": identifier,
         "symbols": request.symbols,
         "seed": request.seed,
-        "timesteps": request.timesteps,
+        "timesteps": model.num_timesteps,
+        "requested_timesteps": request.timesteps,
+        "training_updates": model._n_updates,
+        "training_update_definition": "Stable-Baselines3 update counter: PPO optimization epochs; DDPG gradient steps",
+        "parameter_sha256": parameters.hexdigest(),
+        "checkpoint_sha256": sha256(
+            (directory / (identifier + ".zip")).read_bytes()
+        ).hexdigest(),
         "dataset_id": request.dataset_id,
         "dataset_version": version(dataset),
+        "training_data_version": version(train_data),
         "train_end": str(sessions[cut - 1]),
         "validation_end": str(sessions[test_cut - 1]),
         "test_start": str(sessions[test_cut]),
-        "observation_version": 1,
+        "observation_version": OBSERVATION_VERSION,
+        "engine_version": ENGINE_VERSION,
+        "runtime_versions": {
+            name: package_version(name)
+            for name in ("numpy", "torch", "gymnasium", "stable-baselines3")
+        },
         "costs": config.model_dump(mode="json"),
     }
     policy = trained_policy(record, runtime)
@@ -179,6 +242,9 @@ def train(request, dataset, runtime, progress=lambda *_: None):
         "policy": evaluated["metrics"],
         "comparisons": comparisons,
         "scope": "Single seeded run, untouched test partition; no outperformance guarantee",
+        "period": evaluated["period"],
+        "partitions": evaluated["partitions"],
+        "execution_assumptions": evaluated["execution_assumptions"],
     }
     progress(1, "Training and held-out evaluation complete")
     return record

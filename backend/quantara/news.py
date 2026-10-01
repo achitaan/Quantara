@@ -8,12 +8,14 @@ import numpy as np
 import pandas as pd
 
 from .market import aligned_prices
+from .model_runtime import serialized_training
 from .schemas import NewsItem
 
 DISTILBERT_MODEL = "navu013/finbert-sentiment-distilbert"
 
 
 @lru_cache(maxsize=1)
+@serialized_training
 def local_classifier():
     from transformers import AutoTokenizer, pipeline
 
@@ -139,6 +141,7 @@ def impact(dataset, news, horizon):
         "baseline_mae": float(np.abs(ty.mean() - y[cut:]).mean()),
         "coefficients": coef.tolist(),
         "scope": "Association evaluation; no claim of causation or outperformance",
+        "label_definition": "Close-to-close total return from the first bar starting at/after news availability to horizon_bars later; overlapping labels purged before the test boundary",
     }
 
 

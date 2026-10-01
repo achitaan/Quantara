@@ -8,7 +8,17 @@ import numpy as np
 import pandas as pd
 
 from .analytics import optimize, performance
-from .market import aligned_prices, return_frame, version
+from .market import aligned_prices, validate_sessions, version
+
+ENGINE_VERSION = 2
+EXECUTION_ASSUMPTIONS = {
+    "timing": "Close signals; earliest fill is a later bar's open or intrabar limit crossing",
+    "costs": "Fixed commission per partial fill; slippage plus half-spread per side",
+    "liquidity": "Per-bar volume participation cap; no queue, order-book or market-impact model",
+    "dividends": "Cash credited on the supplied action date (normally ex-date), not pay-date; no withholding tax",
+    "holdings": "Long-only fractional shares; no borrowing or margin",
+    "ending": "Open positions marked at final close; no forced liquidation or exit charges",
+}
 
 
 def initial_state(capital):
@@ -23,6 +33,7 @@ def initial_state(capital):
         "steps": 0,
         "actions": [],
         "target": {},
+        "marks": {},
     }
 
 
@@ -80,6 +91,15 @@ def execute(state, bars, timestamp, config, actions=()):
     stamp = timestamp.isoformat()
     if state["last_timestamp"] and timestamp <= pd.Timestamp(state["last_timestamp"]):
         return False
+    if state["last_timestamp"] and any(
+        action.timestamp <= pd.Timestamp(state["last_timestamp"])
+        and f"{action.timestamp.isoformat()}:{action.symbol}:{action.type}:{action.amount}"
+        not in state["actions"]
+        for action in actions
+    ):
+        raise ValueError(
+            "Late corporate action would rewrite executed history; rebuild the account"
+        )
     # Actions are applied exactly once before this bar's orders. Stable keys survive restarts.
     for action in sorted(actions, key=lambda a: (a.timestamp, a.type != "split")):
         key = f"{action.timestamp.isoformat()}:{action.symbol}:{action.type}:{action.amount}"
@@ -163,6 +183,7 @@ def execute(state, bars, timestamp, config, actions=()):
         )
     if state["cash"] < -1e-6 or any(q < -1e-6 for q in state["holdings"].values()):
         raise ValueError("Execution violated cash or long-only constraints")
+    state["marks"] = {symbol: bar.close for symbol, bar in bars.items()}
     state["last_timestamp"], state["steps"] = stamp, state["steps"] + 1
     state["equity"].append(
         {"timestamp": stamp, "equity": equity(state, bars), "cash": state["cash"]}
@@ -181,6 +202,8 @@ def targets(history, strategy, state, news=(), policy=None):
     if strategy.type == "rebalance":
         if (state["steps"] - 1) % strategy.rebalance_every:
             return None
+        if strategy.method == "equal_weight":
+            return {s: 1 / n for s in strategy.symbols}
         if (
             strategy.method != "equal_weight"
             and len(history.resample("1D").last().dropna()) < 3
@@ -197,7 +220,12 @@ def targets(history, strategy, state, news=(), policy=None):
                 if symbol in x["symbols"]
                 and pd.Timestamp(x["available_at"]) <= history.index[-1]
             ]
-            if latest and latest[-1]["score"] >= strategy.sentiment_threshold:
+            newest = (
+                max(latest, key=lambda x: pd.Timestamp(x["available_at"]))
+                if latest
+                else None
+            )
+            if newest and newest["score"] >= strategy.sentiment_threshold:
                 active.append(symbol)
             continue
         if len(series) < strategy.slow:
@@ -243,10 +271,8 @@ def advance(
     return state
 
 
-def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=None):
-    prices = aligned_prices(dataset, strategy.symbols)
-    if config.benchmark not in return_frame(dataset):
-        raise ValueError("Benchmark history is missing from the dataset")
+def execution_groups(dataset, config):
+    """One immutable date/split selection for historical simulation and replay."""
     grouped = [
         (ts, bars)
         for ts, bars in groups(dataset)
@@ -266,9 +292,25 @@ def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=Non
         int(len(dates) * (config.train_fraction + config.validation_fraction)),
     )
     val_end = min(val_end, len(dates) - 1)
+    if not train_end < val_end < len(dates):
+        raise ValueError(
+            "Training, validation and test partitions must each contain a session"
+        )
     test_start = dates[val_end]
     if config.evaluation in ("test", "walk_forward"):
         grouped = [(ts, bars) for ts, bars in grouped if ts.date() >= test_start]
+    return grouped, {
+        "train_end": str(dates[train_end - 1]),
+        "validation_end": str(dates[val_end - 1]),
+        "test_start": str(test_start),
+    }
+
+
+def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=None):
+    validate_sessions(dataset)
+    prices = aligned_prices(dataset, strategy.symbols)
+    benchmark_prices = aligned_prices(dataset, [config.benchmark])[config.benchmark]
+    grouped, partitions = execution_groups(dataset, config)
     state = initial_state(config.capital)
     # A prior instant preserves the initial capital and execution costs in total return.
     baseline_ts = pd.Timestamp(grouped[0][0]) - pd.Timedelta(days=1)
@@ -297,9 +339,7 @@ def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=Non
         [v["equity"] for v in state["equity"]],
         index=pd.to_datetime([v["timestamp"] for v in state["equity"]], utc=True),
     )
-    benchmark = return_frame(dataset)[config.benchmark].reindex(
-        [ts for ts, _ in grouped]
-    )
+    benchmark = benchmark_prices.reindex([ts for ts, _ in grouped])
     bench = config.capital * benchmark / benchmark.iloc[0]
     bench.loc[baseline_ts] = config.capital
     bench = bench.sort_index()
@@ -317,13 +357,11 @@ def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=Non
         "dataset_version": version(dataset),
         "fixture": dataset.fixture,
         "source": dataset.source,
-        "partitions": {
-            "train_end": str(dates[train_end - 1]),
-            "validation_end": str(dates[val_end - 1]),
-            "test_start": str(test_start),
-        },
+        "partitions": partitions,
         "execution": "Signals at bar close; orders eligible only on a later bar. Long-only, fractional shares.",
         "evaluation": config.evaluation,
+        "engine_version": ENGINE_VERSION,
+        "execution_assumptions": EXECUTION_ASSUMPTIONS,
     }
     result["benchmark_comparison"] = {
         "strategy_return": result["metrics"]["total_return"],
@@ -342,6 +380,9 @@ def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=Non
                 continue
             sub = curve[[ts.date() in chunk for ts in curve.index]]
             if len(sub):
+                # Include the prior valuation so the first return of every fold counts.
+                prior = curve[curve.index < sub.index[0]].iloc[-1:]
+                sub = pd.concat([prior, sub])
                 folds.append(
                     {
                         "start": str(chunk[0]),
@@ -351,7 +392,7 @@ def run(dataset, strategy, config, progress=lambda *_: None, news=(), policy=Non
                 )
         result["walk_forward"] = {
             "folds": folds,
-            "policy": "Fixed rules; rolling past-only windows, no test-set tuning",
+            "policy": "Fixed strategy/policy; past-only decisions, consecutive test folds; no retraining or test-set tuning",
         }
     return result
 
@@ -363,10 +404,25 @@ def replay_step(account, dataset, strategy, batch=1, news=(), policy=None):
     if value["status"] != "running":
         raise ValueError("Paper account is not running")
     config = Backtest.model_validate(value["config"])
+    validate_sessions(dataset)
     frame = aligned_prices(dataset, strategy.symbols)
+    if value.get("mode", "replay") == "replay":
+        selected, _ = execution_groups(dataset, config)
+        if not value["state"]["equity"]:
+            value["state"]["equity"].append(
+                {
+                    "timestamp": (
+                        pd.Timestamp(selected[0][0]) - pd.Timedelta(days=1)
+                    ).isoformat(),
+                    "equity": config.capital,
+                    "cash": config.capital,
+                }
+            )
+    else:
+        selected = groups(dataset)
     remaining = [
         (ts, bars)
-        for ts, bars in groups(dataset)
+        for ts, bars in selected
         if not value["state"]["last_timestamp"]
         or ts > pd.Timestamp(value["state"]["last_timestamp"])
     ]

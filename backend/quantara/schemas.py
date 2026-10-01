@@ -81,6 +81,12 @@ class Dataset(Schema):
         if len(set(keys)) != len(keys):
             raise ValueError("Duplicate symbol/timestamp bars")
         self.bars.sort(key=lambda b: (b.timestamp, b.symbol))
+        action_keys = [(a.timestamp, a.symbol, a.type) for a in self.actions]
+        if len(set(action_keys)) != len(action_keys):
+            raise ValueError("Duplicate or conflicting corporate actions")
+        if set(a.symbol for a in self.actions) - set(b.symbol for b in self.bars):
+            raise ValueError("Corporate-action symbols must have price history")
+        self.actions.sort(key=lambda a: (a.timestamp, a.type != "split", a.symbol))
         return self
 
 
@@ -310,11 +316,21 @@ class TrainRequest(Schema):
     seed: int = Field(default=42, ge=0)
     train_fraction: Positive = Field(default=0.6, lt=0.8)
     validation_fraction: Positive = Field(default=0.2, lt=0.4)
+    capital: Positive = 100000
+    commission: Nonnegative = 0
+    slippage_bps: Nonnegative = Field(default=5, le=1000)
+    spread_bps: Nonnegative = Field(default=0, le=1000)
+    participation: Positive = Field(default=0.01, le=1)
+    benchmark: Symbol = "SPY"
 
     @model_validator(mode="after")
     def split(self):
         if self.train_fraction + self.validation_fraction >= 1:
             raise ValueError("A test partition is required")
+        if len(set(self.symbols)) != len(self.symbols):
+            raise ValueError("Symbols must be unique")
+        if self.algorithm == "DDPG" and self.timesteps <= 100:
+            raise ValueError("DDPG needs more than 100 steps to learn after warmup")
         return self
 
 

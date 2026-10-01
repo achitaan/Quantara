@@ -43,4 +43,4 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r backend/requirements-models.txt
-      - run: QUANTARA_MODEL_TESTS=1 python -m pytest backend/tests/test_optional_models.py backend/tests/test_lightweight_models.py
+      - run: QUANTARA_MODEL_TESTS=1 python -m pytest backend/tests/test_optional_models.py backend/tests/test_lightweight_models.py backend/tests/test_research_accuracy.py

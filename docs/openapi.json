@@ -3595,6 +3595,45 @@
             "exclusiveMinimum": 0.0,
             "title": "Validation Fraction",
             "default": 0.2
+          },
+          "capital": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Capital",
+            "default": 100000
+          },
+          "commission": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Commission",
+            "default": 0
+          },
+          "slippage_bps": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Slippage Bps",
+            "default": 5
+          },
+          "spread_bps": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Spread Bps",
+            "default": 0
+          },
+          "participation": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Participation",
+            "default": 0.01
+          },
+          "benchmark": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9.\\-]{0,14}$",
+            "title": "Benchmark",
+            "default": "SPY"
           }
         },
         "additionalProperties": false,

@@ -131,6 +131,32 @@ class Services:
                 self.store.list("news", owner),
                 self.policy(strategy, owner),
             )
+            if strategy.type == "rl":
+                model = self.store.get("model", strategy.model_id, owner)
+                out_of_sample = result["period"]["start"][:10] > model["validation_end"]
+                changed_costs = [
+                    name
+                    for name in (
+                        "capital",
+                        "commission",
+                        "slippage_bps",
+                        "spread_bps",
+                        "participation",
+                    )
+                    if getattr(req, name) != model["costs"][name]
+                ]
+                result["model_evaluation"] = {
+                    "model_id": strategy.model_id,
+                    "checkpoint_sha256": model["checkpoint_sha256"],
+                    "training_dataset_version": model["dataset_version"],
+                    "training_end": model["train_end"],
+                    "validation_end": model["validation_end"],
+                    "out_of_sample_dates": out_of_sample,
+                    "cost_settings_changed": changed_costs,
+                    "scope": "Dates follow validation"
+                    if out_of_sample
+                    else "Includes training/validation dates; this is not a held-out performance estimate",
+                }
             return self.store.create(
                 "backtest",
                 owner,

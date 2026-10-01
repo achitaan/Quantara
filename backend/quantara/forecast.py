@@ -3,6 +3,8 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 
+from .model_runtime import serialized_training
+
 
 def daily_transactions(request):
     ids = set()
@@ -35,6 +37,11 @@ def baseline(train, days):
 def predict(train, days, method):
     if method == "baseline":
         return baseline(train, days), None
+    return predict_model(train, days, method)
+
+
+@serialized_training
+def predict_model(train, days, method):
     if len(train) < 90:
         raise ValueError(
             "Prophet/LSTM require at least 90 days of chronological history"
@@ -44,7 +51,8 @@ def predict(train, days, method):
 
         model = Prophet(daily_seasonality=False, yearly_seasonality=False)
         model.fit(
-            pd.DataFrame({"ds": train.index.tz_localize(None), "y": train.values})
+            pd.DataFrame({"ds": train.index.tz_localize(None), "y": train.values}),
+            seed=42,
         )
         future = model.make_future_dataframe(periods=days, include_history=False)
         out = model.predict(future)
@@ -122,6 +130,7 @@ def forecast(request, progress=lambda *_: None):
         "mae": float(np.abs(residuals).mean()),
         "baseline_mae": float(np.abs(test.values - base.values).mean()),
         "interval_method": "Empirical held-out residual bootstrap; research uncertainty",
+        "interval_scope": "Holdout residuals also calibrate intervals; independent resampling assumes no serial dependence. Future coverage has not been validated.",
     }
     progress(0.5, "Refitting on recorded history")
     future, metadata = predict(series, request.days, request.method)
