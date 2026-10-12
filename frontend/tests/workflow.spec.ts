@@ -13,11 +13,9 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
     .getByLabel("Password", { exact: true })
     .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Your research, connected." }),
-  ).toBeVisible();
+  await expect(page.locator(".current-hero h1")).toBeVisible();
   await page.getByRole("button", { name: "Load research demo" }).click();
-  await expect(page.getByText(/Across 1 portfolios/)).toBeVisible();
+  await expect(page.locator(".holdings-table")).toContainText("AAPL");
   await page.screenshot({ path: "../runtime/overview.png", fullPage: true });
   await page
     .getByRole("navigation")
@@ -71,7 +69,7 @@ test("import, analyze, simulate, paper trade, forecast, research and explain", a
     page.getByRole("heading", { name: "Simulation results", exact: true }),
   ).toBeInViewport();
   await expect(
-    page.getByText("Solid purple: strategy · Dashed: benchmark"),
+    page.getByText("Solid line: strategy · Dashed line: benchmark"),
   ).toBeVisible();
   const resultTop = await page
     .getByRole("heading", { name: "Simulation results", exact: true })
@@ -170,10 +168,9 @@ test("training charts expose recorded rewards and untouched test comparisons", a
     .getByLabel("Password", { exact: true })
     .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Your research, connected." }),
-  ).toBeVisible();
+  await expect(page.locator(".current-hero h1")).toBeVisible();
   await page.request.post("/api/demo", { data: {} });
+  await page.getByLabel("Account menu", { exact: true }).click();
   await page.getByRole("button", { name: /Refresh/ }).click();
   await page
     .getByRole("navigation")
@@ -230,9 +227,7 @@ test("mobile navigation and safe text rendering", async ({ page }) => {
     .getByLabel("Password", { exact: true })
     .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Your research, connected." }),
-  ).toBeVisible();
+  await expect(page.locator(".current-hero h1")).toBeVisible();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Assistant", exact: true })
@@ -254,9 +249,8 @@ test("appearance persists across reloads and preserves the watchlist", async ({
     .getByLabel("Password", { exact: true })
     .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Your research, connected." }),
-  ).toBeVisible();
+  await expect(page.locator(".current-hero h1")).toBeVisible();
+  await page.getByLabel("Account menu", { exact: true }).click();
   await expect(
     page.getByRole("button", { name: /Switch to (light|dark) mode/ }),
   ).toBeEnabled();
@@ -270,7 +264,10 @@ test("appearance persists across reloads and preserves the watchlist", async ({
         (await (await page.request.get("/api/settings")).json()).theme,
     )
     .toBe("light");
-  await page.screenshot({ path: "../runtime/glass-light.png", fullPage: true });
+  await page.screenshot({
+    path: "../runtime/current-light.png",
+    fullPage: true,
+  });
   await page.getByRole("button", { name: "Switch to dark mode" }).click();
   await expect
     .poll(
@@ -278,8 +275,13 @@ test("appearance persists across reloads and preserves the watchlist", async ({
         (await (await page.request.get("/api/settings")).json()).theme,
     )
     .toBe("dark");
-  await page.screenshot({ path: "../runtime/glass-dark.png", fullPage: true });
+  await page.screenshot({
+    path: "../runtime/current-dark.png",
+    fullPage: true,
+  });
   await page.reload();
+  await expect(page.locator(".current-hero h1")).toBeVisible();
+  await page.getByLabel("Account menu", { exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Switch to light mode" }),
   ).toBeVisible();
@@ -300,7 +302,7 @@ test("appearance persists across reloads and preserves the watchlist", async ({
     ),
   ).toBeTruthy();
   await page.screenshot({
-    path: "../runtime/glass-mobile.png",
+    path: "../runtime/current-theme-mobile.png",
     fullPage: true,
   });
 });

@@ -11,3 +11,4 @@ runtime/
 *.tsbuildinfo
 playwright-report/
 test-results/
+.playwright-cli/

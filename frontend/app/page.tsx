@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
+import { CurrentHero, CurrentOverview } from "@/components/current-overview";
 import {
   EquityCharts,
   SeriesChart,
@@ -662,7 +663,9 @@ export default function Workspace() {
     setCashbook(cb.transactions);
     setHealth(h);
     setPreferences(prefs);
-    setPortfolio((v) => v || p[0]?.id || "");
+    setPortfolio((v) =>
+      p.some((portfolio) => portfolio.id === v) ? v : p[0]?.id || "",
+    );
     setDataset((v) => v || d[0]?.id || "");
   }, []);
   useEffect(() => {
@@ -681,9 +684,14 @@ export default function Workspace() {
         !jobs.some((j) => j.status === "running" || j.status === "queued"))
     )
       return;
+    let cancelled = false;
+    let polling = false;
     const timer = setInterval(async () => {
+      if (polling || cancelled) return;
+      polling = true;
       try {
         const next = await api<Job[]>("jobs?include_results=false");
+        if (cancelled) return;
         const completedSummaries = next.filter(
           (j) =>
             j.status === "complete" &&
@@ -693,6 +701,7 @@ export default function Workspace() {
         const completed = await Promise.all(
           completedSummaries.map((j) => api<Job>("jobs/" + j.id)),
         );
+        if (cancelled) return;
         const failed = next.find(
           (j) =>
             j.status === "failed" &&
@@ -731,10 +740,16 @@ export default function Workspace() {
         }
         if (completed.length || failed) await refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Connection lost");
+        if (!cancelled)
+          setError(e instanceof Error ? e.message : "Connection lost");
+      } finally {
+        polling = false;
       }
     }, 1000);
-    return () => clearInterval(timer);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, [user, jobs, pendingJobs, refresh]);
   async function act(action: () => Promise<unknown>) {
     setError("");
@@ -901,7 +916,7 @@ export default function Workspace() {
     return (
       <main className="login">
         <div className="brand">
-          Q<span>QUANTARA</span>
+          <span>Quantara</span>
         </div>
         <p>Opening your workspace…</p>
       </main>
@@ -917,7 +932,6 @@ export default function Workspace() {
         </div>
         <div className="login-card">
           <div className="brand">
-            <b>Q</b>
             <span>Quantara</span>
           </div>
           <p className="eyebrow">LOCAL-FIRST RESEARCH</p>
@@ -978,106 +992,158 @@ export default function Workspace() {
       </main>
     );
   return (
-    <div className="workspace">
-      <aside className="sidebar">
-        <div className="brand">
-          <b>Q</b>
-          <span>
-            Quantara<small>RESEARCH WORKSPACE</small>
-          </span>
+    <div className="current-shell">
+      <a className="skip-link" href="#workspace-content">
+        Skip to content
+      </a>
+      <header className="current-header">
+        <div className="current-top-row">
+          <button
+            type="button"
+            className="brand current-brand"
+            onClick={() => selectSection("Overview")}
+            aria-label="Quantara overview"
+          >
+            Quantara
+          </button>
+          <div className="current-group-nav" aria-label="Workspace groups">
+            {(
+              [
+                ["Portfolio", "Overview", ["Overview", "Portfolio"]],
+                [
+                  "Research",
+                  "Strategies",
+                  ["Strategies", "Models", "Assistant"],
+                ],
+                ["Simulation", "Simulator", ["Simulator", "Paper trading"]],
+                ["Markets", "Market data", ["Market data", "Signals"]],
+                ["Insights", "Cash flow", ["Cash flow", "Tax research"]],
+              ] as [string, Section, Section[]][]
+            ).map(([name, destination, members]) => (
+              <button
+                type="button"
+                key={name}
+                aria-label={"Open " + name + " workspace"}
+                aria-pressed={members.includes(section)}
+                onClick={() => selectSection(destination)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          <details
+            className="current-account"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.currentTarget.open = false;
+                e.currentTarget.querySelector("summary")?.focus();
+              }
+            }}
+          >
+            <summary aria-label="Account menu">
+              <span className="avatar">{user.slice(0, 2).toUpperCase()}</span>
+              <span aria-hidden="true">⌄</span>
+            </summary>
+            <div className="current-account-panel">
+              <strong>{user}</strong>
+              <small>Research account · Virtual orders only</small>
+              <ThemeSwitch
+                theme={preferences.theme}
+                onChange={() => void toggleTheme()}
+                disabled={savingTheme || busy}
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void act(refresh)}
+              >
+                ↻ Refresh
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await api("auth/logout", {});
+                    setUser(null);
+                  } catch (e) {
+                    setError(
+                      e instanceof Error ? e.message : "Sign-out failed.",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Sign out
+              </button>
+              <div className="model-status">
+                <i className={health.model_ready ? "online" : ""} />
+                <div>
+                  <strong>Local intelligence</strong>
+                  <small>
+                    {health.model_ready
+                      ? text(health.model)
+                      : "Model offline · calculations ready"}
+                  </small>
+                </div>
+              </div>
+            </div>
+          </details>
         </div>
-        <p className="nav-caption">WORKSPACE</p>
-        <nav aria-label="Workspace">
+        <nav aria-label="Workspace" className="current-tool-nav">
           {sections.map((s) => (
             <button
+              type="button"
               key={s}
               aria-label={s}
-              className={section === s ? "nav-item selected" : "nav-item"}
+              aria-current={section === s ? "page" : undefined}
+              className={section === s ? "selected" : ""}
               onClick={() => selectSection(s)}
             >
-              <Icon name={s} />
-              <span>{s}</span>
+              {s}
               {s === "Paper trading" &&
-                papers.some((p) => p.status === "running") && <i />}
+                papers.some((p) => p.status === "running") && (
+                  <span
+                    className="current-running"
+                    aria-label="Running accounts"
+                  >
+                    {" "}
+                    · Running
+                  </span>
+                )}
             </button>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="model-status">
-            <i className={health.model_ready ? "online" : ""} />
-            <div>
-              <strong>Local intelligence</strong>
-              <small>
-                {health.model_ready
-                  ? text(health.model)
-                  : "Model offline · calculations ready"}
-              </small>
+      </header>
+      <main className="current-main" id="workspace-content" tabIndex={-1}>
+        {section === "Overview" && (
+          <CurrentHero
+            portfolios={portfolios}
+            portfolio={portfolio}
+            onSelect={setPortfolio}
+          />
+        )}
+        <div
+          className={
+            section === "Overview"
+              ? "content current-content current-overview-content"
+              : "content current-content"
+          }
+        >
+          {section !== "Overview" && (
+            <div className="page-heading">
+              <div>
+                <p className="eyebrow">{section.toUpperCase()}</p>
+                <h1>{titles[section]}</h1>
+                <p>
+                  Run the calculation. Keep the evidence. Compare what changes.
+                </p>
+              </div>
             </div>
-          </div>
-          <button
-            className="user"
-            onClick={() => {
-              void api("auth/logout", {}).then(() => setUser(null));
-            }}
-            title="Sign out"
-          >
-            <span className="avatar">{user[0].toUpperCase()}</span>
-            <span>
-              {user}
-              <small>Research account</small>
-            </span>
-            <span>↪</span>
-          </button>
-        </div>
-      </aside>
-      <main className="main">
-        <header className="topbar">
-          <div>
-            <span>Workspace</span>
-            <span className="slash">/</span>
-            <strong>{section}</strong>
-          </div>
-          <div className="top-actions">
-            <span className="tag">VIRTUAL ORDERS ONLY</span>
-            <ThemeSwitch
-              theme={preferences.theme}
-              onChange={() => void toggleTheme()}
-              disabled={savingTheme || busy}
-            />
-            <button
-              className="quiet"
-              disabled={busy}
-              onClick={() => void act(refresh)}
-            >
-              ↻ Refresh
-            </button>
-          </div>
-        </header>
-        <div className="content">
-          <div className="page-heading">
-            <div>
-              <p className="eyebrow">
-                {section === "Overview"
-                  ? "RESEARCH HOME"
-                  : section.toUpperCase()}
-              </p>
-              <h1>{titles[section]}</h1>
-              <p>
-                {section === "Overview"
-                  ? "A clear view of your portfolio, experiments and next questions."
-                  : "Run the calculation. Keep the evidence. Compare what changes."}
-              </p>
-            </div>
-            {section === "Overview" && (
-              <button
-                className="primary"
-                disabled={busy}
-                onClick={() => void submit("demo", {})}
-              >
-                Load research demo <span>↗</span>
-              </button>
-            )}
-          </div>
+          )}
           {error && (
             <div className="error" role="alert">
               {error}
@@ -1111,153 +1177,65 @@ export default function Workspace() {
             </p>
           )}
           {section === "Overview" && (
-            <>
-              <div className="stats">
-                <div className="stat">
-                  <span>Recorded cash</span>
-                  <strong>
-                    {money(
-                      portfolios
-                        .filter((p) => p.currency === "USD")
-                        .reduce((n, p) => n + p.balance.cash, 0),
-                    )}
-                  </strong>
-                  <small>
-                    Across {portfolios.length} portfolios · USD shown
-                    {portfolios.some((p) => p.currency === "CAD") &&
-                      " · CAD " +
-                        money(
-                          portfolios
-                            .filter((p) => p.currency === "CAD")
-                            .reduce((n, p) => n + p.balance.cash, 0),
-                          "CAD",
-                        )}
-                  </small>
-                </div>
-                <div className="stat">
-                  <span>Research datasets</span>
-                  <strong>{datasets.length.toString().padStart(2, "0")}</strong>
-                  <small>
-                    {datasets.filter((d) => d.fixture).length} synthetic
-                    fixtures
-                  </small>
-                </div>
-                <div className="stat">
-                  <span>Completed simulations</span>
-                  <strong>
-                    {backtests.length.toString().padStart(2, "0")}
-                  </strong>
-                  <small>{strategies.length} saved strategy definitions</small>
-                </div>
-                <div className="stat">
-                  <span>Paper accounts</span>
-                  <strong>
-                    {papers
-                      .filter((p) => p.status === "running")
-                      .length.toString()
-                      .padStart(2, "0")}
-                  </strong>
-                  <small>{papers.length} virtual accounts in total</small>
-                </div>
-              </div>
-              <div className="grid wide">
-                <Panel
-                  title="Latest experiment"
-                  subtitle={
-                    lastTest
-                      ? text(lastTest.name)
-                      : "Your first result starts with a question."
-                  }
-                >
+            <CurrentOverview
+              portfolio={portfolio}
+              watchlist={preferences.watchlist}
+              backtests={backtests}
+              reports={reports}
+              datasetCount={datasets.length}
+              strategyCount={strategies.length}
+              busy={busy}
+              onNavigate={selectSection}
+              onDemo={() => void submit("demo", {})}
+              onPortfolioAction={(action) => {
+                selectSection("Portfolio");
+                requestAnimationFrame(() => {
+                  const target = document.getElementById(
+                    action === "risk" ? "portfolio-risk" : "portfolio-records",
+                  );
+                  target?.scrollIntoView({ block: "start" });
+                  target?.focus({ preventScroll: true });
+                });
+              }}
+              simulation={
+                <>
+                  {lastTest && (
+                    <p className="current-experiment-name">
+                      {text(lastTest.name)}
+                    </p>
+                  )}
                   {lastTest && lastTest.engine_version !== 2 && (
                     <p className="notice">
                       Earlier simulator result. Rerun this experiment with the
                       corrected engine.
                     </p>
                   )}
-                  <Chart data={lastEquity} />
-                  {lastTest && (
-                    <div className="metric-strip">
-                      {["total_return", "max_drawdown", "sharpe"].map((k) => (
-                        <div key={k}>
-                          <small>{label(k)}</small>
-                          <strong>
-                            {typeof record(lastTest.metrics)[k] === "number"
-                              ? k === "sharpe"
-                                ? number(record(lastTest.metrics)[k]).toFixed(3)
-                                : (
-                                    number(record(lastTest.metrics)[k]) * 100
-                                  ).toFixed(2) + "%"
-                              : "—"}
-                          </strong>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Panel>
-                <Panel
-                  title="Continue your research"
-                  subtitle="From records to a reproducible result."
-                >
-                  <div className="workflow">
-                    {(
-                      [
-                        "Portfolio",
-                        "Market data",
-                        "Strategies",
-                        "Simulator",
-                        "Paper trading",
-                        "Assistant",
-                      ] as Section[]
-                    ).map((s, i) => (
-                      <button key={s} onClick={() => selectSection(s)}>
-                        <span>{String(i + 1).padStart(2, "0")}</span>
-                        <div>
-                          <strong>{s}</strong>
-                          <small>
-                            {
-                              [
-                                "Import and reconcile transactions",
-                                "Check source and coverage",
-                                "Define a repeatable rule",
-                                "Compare costs and benchmark",
-                                "Replay or follow arriving bars",
-                                "Explain the recorded evidence",
-                              ][i]
-                            }
-                          </small>
-                        </div>
-                        <b>↗</b>
-                      </button>
-                    ))}
-                  </div>
-                </Panel>
-              </div>
-              <Panel
-                title="Research activity"
-                subtitle="Saved work stays available for review."
-              >
-                <Table
-                  data={[
-                    ...backtests.slice(-3).map((b) => ({
-                      name: b.name,
-                      type: "Simulation",
-                      status: "Complete",
-                    })),
-                    ...reports.slice(-3).map((r) => ({
-                      name: r.name,
-                      type: "Analysis",
-                      status: "Complete",
-                    })),
-                  ]}
-                  keys={["name", "type", "status"]}
-                />
-              </Panel>
-            </>
+                  <SeriesChart
+                    title="Simulated equity"
+                    series={[
+                      {
+                        name: "Strategy",
+                        points: lastEquity.map((p) => ({
+                          x: text(p.timestamp ?? p.date),
+                          y: number(p.equity),
+                        })),
+                      },
+                      {
+                        name: "Benchmark",
+                        points: rows(lastTest?.benchmark_curve).map((p) => ({
+                          x: text(p.timestamp ?? p.date),
+                          y: number(p.equity),
+                        })),
+                      },
+                    ]}
+                  />
+                </>
+              }
+            />
           )}
           {section === "Portfolio" && (
             <>
-              <div className="grid">
+              <div className="grid" id="portfolio-records" tabIndex={-1}>
                 <Panel title="Your portfolios">
                   <label className="field">
                     <span>Active portfolio</span>
@@ -1374,85 +1352,90 @@ export default function Workspace() {
                   />
                 </Panel>
               )}
-              <Panel
-                title="Risk and allocation"
-                subtitle="Weights are calculated in Python from the selected history."
-              >
-                <form
-                  className="form-grid"
-                  onSubmit={form((d) =>
-                    api(
-                      get(d, "analysis") === "risk"
-                        ? "risk"
-                        : "portfolios/optimize",
-                      get(d, "analysis") === "risk"
-                        ? { dataset_id: selectedDataset, weights: equalWeights }
-                        : {
-                            dataset_id: selectedDataset,
-                            method: get(d, "method"),
-                            holdings: equalWeights,
-                            max_weight: num(d, "cap"),
-                            views: Object.fromEntries(
-                              get(d, "views")
-                                .split(",")
-                                .filter(Boolean)
-                                .map((v) => {
-                                  const [s, w] = v.trim().split("=");
-                                  return [s.toUpperCase(), Number(w)];
-                                }),
-                            ),
-                          },
-                    ),
-                  )}
+              <div id="portfolio-risk" tabIndex={-1}>
+                <Panel
+                  title="Risk and allocation"
+                  subtitle="Equal-weight risk research and allocation proposals from selected market history."
                 >
-                  <label className="field">
-                    <span>Market history</span>
-                    <select
-                      value={selectedDataset}
-                      onChange={(e) => setDataset(e.target.value)}
-                    >
-                      {datasetOptions.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <Field
-                    name="analysis"
-                    title="Analysis"
-                    options={["risk", "optimize"]}
-                  />
-                  <Field
-                    name="method"
-                    title="Allocation method"
-                    options={methods}
-                  />
-                  <Field
-                    name="cap"
-                    title="Maximum asset weight"
-                    type="number"
-                    min={0.01}
-                    max={1}
-                    step={0.01}
-                    value={1}
-                  />
-                  <Field
-                    name="views"
-                    title="Annual return views (Black–Litterman)"
-                    value=""
-                    required={false}
-                  />
-                  <button className="primary" disabled={busy || !dataset}>
-                    Run analysis
-                  </button>
-                </form>
-                <small>
-                  Risk uses equal weights over recorded holdings (or dataset
-                  symbols when no holdings exist). Return views use
-                  AAPL=0.08,MSFT=0.06.
-                </small>
-              </Panel>
+                  <form
+                    className="form-grid"
+                    onSubmit={form((d) =>
+                      api(
+                        get(d, "analysis") === "risk"
+                          ? "risk"
+                          : "portfolios/optimize",
+                        get(d, "analysis") === "risk"
+                          ? {
+                              dataset_id: selectedDataset,
+                              weights: equalWeights,
+                            }
+                          : {
+                              dataset_id: selectedDataset,
+                              method: get(d, "method"),
+                              holdings: equalWeights,
+                              max_weight: num(d, "cap"),
+                              views: Object.fromEntries(
+                                get(d, "views")
+                                  .split(",")
+                                  .filter(Boolean)
+                                  .map((v) => {
+                                    const [s, w] = v.trim().split("=");
+                                    return [s.toUpperCase(), Number(w)];
+                                  }),
+                              ),
+                            },
+                      ),
+                    )}
+                  >
+                    <label className="field">
+                      <span>Market history</span>
+                      <select
+                        value={selectedDataset}
+                        onChange={(e) => setDataset(e.target.value)}
+                      >
+                        {datasetOptions.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Field
+                      name="analysis"
+                      title="Analysis"
+                      options={["risk", "optimize"]}
+                    />
+                    <Field
+                      name="method"
+                      title="Allocation method"
+                      options={methods}
+                    />
+                    <Field
+                      name="cap"
+                      title="Maximum asset weight"
+                      type="number"
+                      min={0.01}
+                      max={1}
+                      step={0.01}
+                      value={1}
+                    />
+                    <Field
+                      name="views"
+                      title="Annual return views (Black–Litterman)"
+                      value=""
+                      required={false}
+                    />
+                    <button className="primary" disabled={busy || !dataset}>
+                      Run analysis
+                    </button>
+                  </form>
+                  <small>
+                    Risk uses equal weights over recorded holdings (or dataset
+                    symbols when no holdings exist). Return views use
+                    AAPL=0.08,MSFT=0.06.
+                  </small>
+                </Panel>
+              </div>
             </>
           )}
           {section === "Market data" && (
@@ -2818,7 +2801,9 @@ export default function Workspace() {
             </details>
           )}
           <footer>
-            <span>Quantara / Research workspace</span>
+            <span className="current-footer-brand">
+              Quantara <small>Invest with intention.</small>
+            </span>
             <span>Local-first · Reproducible history · Virtual execution</span>
           </footer>
         </div>

@@ -11,9 +11,7 @@ test("assistant shows a streamed preview and then cited document evidence", asyn
     .getByLabel("Password", { exact: true })
     .fill(process.env.TEAM_PASSWORD!);
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Your research, connected." }),
-  ).toBeVisible();
+  await expect(page.locator(".current-hero h1")).toBeVisible();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Assistant", exact: true })
@@ -57,11 +55,13 @@ test("assistant shows a streamed preview and then cited document evidence", asyn
   await page.route("**/api/conversations/chat", async (route) =>
     route.fulfill({ json: job }),
   );
-  await page.route("**/api/jobs?include_results=false", async (route) =>
-    route.fulfill({
+  await page.route("**/api/jobs?include_results=false", async (route) => {
+    // A response slower than the poll interval must still append one reply.
+    if (finished) await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.fulfill({
       json: [{ ...job, status: finished ? "complete" : "running" }],
-    }),
-  );
+    });
+  });
   await page.route(
     "**/api/jobs/stream-preview-test/events?include_results=false",
     async (route) =>
@@ -85,6 +85,7 @@ test("assistant shows a streamed preview and then cited document evidence", asyn
   );
   finished = true;
   const reply = page.locator(".message.assistant:not(.streaming-reply)");
+  await expect(reply).toHaveCount(1);
   await expect(reply).toContainText("CAD 100");
   await expect(page.locator(".streaming-reply")).toHaveCount(0);
   await expect(reply).toContainText("Retrieval: local embeddings");

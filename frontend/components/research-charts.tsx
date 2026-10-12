@@ -1,14 +1,14 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { number, record, rows, text } from "@/lib/chart-data";
 
 type Point = { x: string | number; y: number };
 type Series = { name: string; points: Point[] };
 const colors = [
-  "var(--purple)",
+  "var(--accent)",
   "var(--muted)",
-  "#ce6fb2",
-  "#438da9",
+  "#b7674b",
+  "#4a8e9c",
   "#ba863d",
 ];
 const format = (v: number, unit: string) =>
@@ -45,11 +45,26 @@ export function SeriesChart({
 }) {
   const [hidden, setHidden] = useState<string[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
+  const plotRef = useRef<SVGSVGElement>(null);
+  const [plotWidth, setPlotWidth] = useState(760);
   const available = series.filter((s) => s.points.length > 1);
   const visible = available.filter((s) => !hidden.includes(s.name));
   const all = visible
     .flatMap((s) => s.points)
     .filter((p) => Number.isFinite(p.y) && Number.isFinite(xValue(p.x)));
+  const hasPoints = all.length > 0;
+  useEffect(() => {
+    const plot = plotRef.current;
+    if (!plot) return;
+    const measure = () => {
+      const width = Math.round(plot.getBoundingClientRect().width);
+      if (width > 0) setPlotWidth(width);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(plot);
+    return () => observer.disconnect();
+  }, [hasPoints]);
   if (!all.length)
     return (
       <p className="empty">
@@ -61,9 +76,41 @@ export function SeriesChart({
   const minY = all.reduce((a, p) => Math.min(a, p.y), Infinity),
     maxY = all.reduce((a, p) => Math.max(a, p.y), -Infinity);
   const yRange = Math.max(maxY - minY, unit === "USD" ? 1 : 0.000001);
+  const compact = plotWidth < 520;
+  const axisFormat = (value: number) =>
+    compact && unit === "USD"
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(value)
+      : format(value, unit);
+  const left = Math.max(
+    64,
+    ...[minY, minY + yRange / 2, minY + yRange].map(
+      (v) => axisFormat(v).length * 7 + 12,
+    ),
+  );
+  const right = plotWidth - 14;
+  const height = compact ? 206 : 255;
+  const top = 20;
+  const bottom = height - 36;
+  const tickLabel = (value: string | number) => {
+    if (!compact || typeof value === "number") return xLabel(value);
+    const sameDay =
+      reference[0].x.toString().slice(0, 10) ===
+      reference.at(-1)!.x.toString().slice(0, 10);
+    return new Intl.DateTimeFormat(
+      "en-US",
+      sameDay
+        ? { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }
+        : { month: "short", day: "2-digit", timeZone: "UTC" },
+    ).format(new Date(value));
+  };
   const x = (v: Point["x"]) =>
-    84 + ((xValue(v) - minX) / Math.max(1, maxX - minX)) * 640;
-  const y = (v: number) => 220 - ((v - minY) / yRange) * 184;
+    left + ((xValue(v) - minX) / Math.max(1, maxX - minX)) * (right - left);
+  const y = (v: number) => bottom - ((v - minY) / yRange) * (bottom - top);
   const reference = visible[0].points;
   const index = Math.min(
     selected ?? reference.length - 1,
@@ -98,7 +145,8 @@ export function SeriesChart({
         ))}
       </div>
       <svg
-        viewBox="0 0 760 255"
+        ref={plotRef}
+        viewBox={`0 0 ${plotWidth} ${height}`}
         role="img"
         aria-label={title}
         onPointerMove={(e) => {
@@ -109,8 +157,8 @@ export function SeriesChart({
               0,
               Math.min(
                 1,
-                (e.clientX - bounds.left - (bounds.width * 84) / 760) /
-                  ((bounds.width * 640) / 760),
+                (e.clientX - bounds.left - (bounds.width * left) / plotWidth) /
+                  ((bounds.width * (right - left)) / plotWidth),
               ),
             ) *
               (maxX - minX);
@@ -127,15 +175,21 @@ export function SeriesChart({
         {[0, 0.5, 1].map((v) => (
           <g key={v}>
             <line
-              x1="84"
-              x2="724"
-              y1={220 - v * 184}
-              y2={220 - v * 184}
+              x1={left}
+              x2={right}
+              y1={bottom - v * (bottom - top)}
+              y2={bottom - v * (bottom - top)}
               stroke="var(--line)"
               strokeDasharray="4 6"
             />
-            <text x="2" y={224 - v * 184} fill="var(--muted)" fontSize="11">
-              {format(minY + v * yRange, unit)}
+            <text
+              x={left - 9}
+              y={bottom + 4 - v * (bottom - top)}
+              textAnchor="end"
+              fill="var(--muted)"
+              fontSize="11"
+            >
+              {axisFormat(minY + v * yRange)}
             </text>
           </g>
         ))}
@@ -162,22 +216,22 @@ export function SeriesChart({
         <line
           x1={x(point.x)}
           x2={x(point.x)}
-          y1="30"
-          y2="220"
+          y1={top}
+          y2={bottom}
           stroke="var(--muted)"
           strokeDasharray="2 5"
         />
-        <text x="84" y="248" fill="var(--muted)" fontSize="11">
-          {xLabel(reference[0].x)}
+        <text x={left} y={height - 10} fill="var(--muted)" fontSize="11">
+          {tickLabel(reference[0].x)}
         </text>
         <text
-          x="724"
-          y="248"
+          x={right}
+          y={height - 10}
           textAnchor="end"
           fill="var(--muted)"
           fontSize="11"
         >
-          {xLabel(reference.at(-1)!.x)}
+          {tickLabel(reference.at(-1)!.x)}
         </text>
       </svg>
       <label className="chart-inspector">
@@ -255,7 +309,7 @@ export function EquityCharts({
         ]}
       />
       {rows(benchmark).length > 0 && (
-        <small>Solid purple: strategy · Dashed: benchmark</small>
+        <small>Solid line: strategy · Dashed line: benchmark</small>
       )}
     </div>
   );
