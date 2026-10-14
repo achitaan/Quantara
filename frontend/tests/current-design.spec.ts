@@ -308,3 +308,64 @@ test("failed sign out keeps the workspace available and reports the failure", as
     page.getByRole("button", { name: "Sign out", exact: true }),
   ).toBeEnabled();
 });
+
+for (const failure of ["network", "server"] as const) {
+  test(`appearance stays usable after a ${failure} save failure`, async ({
+    page,
+  }) => {
+    let unavailable = true;
+    let settings = { theme: "light", watchlist: ["NVDA"] };
+    await page.route("**/api/settings", async (route) => {
+      if (route.request().method() === "PUT") {
+        if (unavailable) {
+          if (failure === "network") await route.abort("failed");
+          else
+            await route.fulfill({
+              status: 503,
+              json: { detail: "Service unavailable" },
+            });
+          return;
+        }
+        settings = route.request().postDataJSON();
+      }
+      await route.fulfill({ json: settings });
+    });
+    await signIn(page);
+    await page.getByLabel("Account menu", { exact: true }).click();
+    await page
+      .getByRole("button", { name: "Switch to dark mode", exact: true })
+      .click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.locator("main").getByRole("alert")).toContainText(
+      "Appearance changed on this device",
+    );
+    await expect(
+      page.getByRole("button", { name: "Switch to light mode", exact: true }),
+    ).toBeEnabled();
+
+    await page.getByRole("button", { name: /Refresh/, exact: false }).click();
+    await expect(
+      page.getByRole("button", { name: /Refresh/, exact: false }),
+    ).toBeEnabled();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.reload();
+    await expect(page.locator(".current-hero h1")).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("quantara-theme")))
+      .toBe("dark");
+
+    unavailable = false;
+    await page.getByLabel("Account menu", { exact: true }).click();
+    await page
+      .getByRole("button", { name: "Switch to light mode", exact: true })
+      .click();
+    await expect.poll(() => settings.theme).toBe("light");
+    await expect(
+      page.getByRole("button", { name: "Switch to dark mode", exact: true }),
+    ).toBeEnabled();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
+    expect(settings.watchlist).toEqual(["NVDA"]);
+  });
+}

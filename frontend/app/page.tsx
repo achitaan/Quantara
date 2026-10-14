@@ -587,11 +587,14 @@ export default function Workspace() {
   }>({ watchlist: [], theme: "light" });
   const [themeReady, setThemeReady] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
+  const deviceTheme = useRef<"dark" | "light" | null>(null);
   useEffect(() => {
     try {
       const stored = localStorage.getItem("quantara-theme");
-      if (stored === "light" || stored === "dark")
+      if (stored === "light" || stored === "dark") {
+        deviceTheme.current = stored;
         setPreferences((v) => ({ ...v, theme: stored }));
+      }
     } catch {
       /* Appearance also works when browser storage is unavailable. */
     }
@@ -607,23 +610,26 @@ export default function Workspace() {
     }
   }, [preferences.theme, themeReady]);
   async function toggleTheme() {
-    const previous = preferences;
     const next = {
       watchlist: preferences.watchlist,
       theme:
         preferences.theme === "light" ? ("dark" as const) : ("light" as const),
     };
+    deviceTheme.current = next.theme;
     setPreferences(next);
     if (!user) return;
+    setError("");
     setSavingTheme(true);
     setBusy(true);
     try {
       const saved = await api<typeof next>("settings", next, "PUT");
-      setPreferences({ watchlist: saved.watchlist, theme: saved.theme });
-    } catch (e) {
-      setPreferences(previous);
+      setPreferences({
+        watchlist: saved.watchlist,
+        theme: deviceTheme.current || saved.theme,
+      });
+    } catch {
       setError(
-        e instanceof Error ? e.message : "Appearance could not be saved.",
+        "Appearance changed on this device, but could not sync to your account. Check that the local service is running.",
       );
     } finally {
       setSavingTheme(false);
@@ -662,7 +668,7 @@ export default function Workspace() {
     setConversationList(c);
     setCashbook(cb.transactions);
     setHealth(h);
-    setPreferences(prefs);
+    setPreferences({ ...prefs, theme: deviceTheme.current || prefs.theme });
     setPortfolio((v) =>
       p.some((portfolio) => portfolio.id === v) ? v : p[0]?.id || "",
     );
