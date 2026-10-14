@@ -1,17 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, openWorkspace } from "./fixtures";
 
 test("assistant shows a streamed preview and then cited document evidence", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page
-    .getByRole("textbox", { name: "Username", exact: true })
-    .fill("demo");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.TEAM_PASSWORD!);
-  await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.locator(".current-hero h1")).toBeVisible();
+  await openWorkspace(page);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Assistant", exact: true })

@@ -19,6 +19,36 @@ export function record(value: unknown): Record<string, Json> {
 export function rows(value: unknown): RecordData[] {
   return Array.isArray(value) ? (value as RecordData[]) : [];
 }
+async function decodeResponse<T>(response: Response): Promise<T> {
+  const body = (await response.text()).trim();
+  let value: unknown;
+  let isJson = false;
+  if (body) {
+    try {
+      value = JSON.parse(body);
+      isJson = true;
+    } catch {
+      // Proxies and unavailable services can return text or HTML instead of JSON.
+    }
+  }
+  const status = `HTTP ${response.status}${response.statusText ? " " + response.statusText : ""}`;
+  if (!response.ok) {
+    if (isJson) {
+      const detail = record(value).detail ?? value;
+      if (typeof detail === "string" && detail) throw new Error(detail);
+      if (detail !== null && detail !== undefined)
+        throw new Error(JSON.stringify(detail));
+    }
+    const isHtml =
+      response.headers.get("content-type")?.includes("text/html") ||
+      body.startsWith("<");
+    const message =
+      !isHtml && body ? body.replace(/\s+/g, " ").slice(0, 500) : "";
+    throw new Error(status + (message ? ": " + message : ""));
+  }
+  if (body && !isJson) throw new Error(status + ": Expected a JSON response.");
+  return value as T;
+}
 export async function api<T>(
   path: string,
   body?: unknown,
@@ -29,14 +59,7 @@ export async function api<T>(
     headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
-  const value = await response.json();
-  if (!response.ok)
-    throw new Error(
-      typeof value.detail === "string"
-        ? value.detail
-        : JSON.stringify(value.detail || value),
-    );
-  return value as T;
+  return decodeResponse<T>(response);
 }
 export async function upload<T>(
   path: string,
@@ -47,12 +70,5 @@ export async function upload<T>(
   form.set("file", file);
   if (options) form.set("options", JSON.stringify(options));
   const response = await fetch("/api/" + path, { method: "POST", body: form });
-  const value = await response.json();
-  if (!response.ok)
-    throw new Error(
-      typeof value.detail === "string"
-        ? value.detail
-        : JSON.stringify(value.detail || value),
-    );
-  return value as T;
+  return decodeResponse<T>(response);
 }

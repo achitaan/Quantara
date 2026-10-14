@@ -1,19 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, openWorkspace, signIn } from "./fixtures";
 
 test("import, analyze, simulate, paper trade, forecast, research and explain", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("/");
-  await page
-    .getByRole("textbox", { name: "Username", exact: true })
-    .fill("demo");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.TEAM_PASSWORD!);
-  await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.locator(".current-hero h1")).toBeVisible();
+  await signIn(page);
   await page.getByRole("button", { name: "Load research demo" }).click();
   await expect(page.locator(".holdings-table")).toContainText("AAPL");
   await page.screenshot({ path: "../runtime/overview.png", fullPage: true });
@@ -160,15 +152,7 @@ test("training charts expose recorded rewards and untouched test comparisons", a
     process.env.QUANTARA_MODEL_TESTS !== "1",
     "Real training requires the optional local model runtime.",
   );
-  await page.goto("/");
-  await page
-    .getByRole("textbox", { name: "Username", exact: true })
-    .fill("demo");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.TEAM_PASSWORD!);
-  await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.locator(".current-hero h1")).toBeVisible();
+  await openWorkspace(page);
   await page.request.post("/api/demo", { data: {} });
   await page.getByLabel("Account menu", { exact: true }).click();
   await page.getByRole("button", { name: /Refresh/ }).click();
@@ -219,15 +203,7 @@ test("training charts expose recorded rewards and untouched test comparisons", a
 
 test("mobile navigation and safe text rendering", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page
-    .getByRole("textbox", { name: "Username", exact: true })
-    .fill("demo");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.TEAM_PASSWORD!);
-  await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.locator(".current-hero h1")).toBeVisible();
+  await openWorkspace(page);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Assistant", exact: true })
@@ -241,15 +217,7 @@ test("mobile navigation and safe text rendering", async ({ page }) => {
 test("appearance persists across reloads and preserves the watchlist", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page
-    .getByRole("textbox", { name: "Username", exact: true })
-    .fill("demo");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.TEAM_PASSWORD!);
-  await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.locator(".current-hero h1")).toBeVisible();
+  await openWorkspace(page);
   await page.getByLabel("Account menu", { exact: true }).click();
   await expect(
     page.getByRole("button", { name: /Switch to (light|dark) mode/ }),

@@ -675,13 +675,21 @@ export default function Workspace() {
     setDataset((v) => v || d[0]?.id || "");
   }, []);
   useEffect(() => {
-    api<{ username: string }>("auth/me")
-      .then((v) => {
-        setUser(v.username);
-        return refresh();
-      })
-      .catch(() => {})
-      .finally(() => setChecking(false));
+    async function bootstrap() {
+      try {
+        const authenticated = await api<{ username: string }>("auth/me").catch(
+          () => null,
+        );
+        if (!authenticated) return;
+        setUser(authenticated.username);
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Workspace could not load.");
+      } finally {
+        setChecking(false);
+      }
+    }
+    void bootstrap();
   }, [refresh]);
   useEffect(() => {
     if (
@@ -757,6 +765,17 @@ export default function Workspace() {
       clearInterval(timer);
     };
   }, [user, jobs, pendingJobs, refresh]);
+  async function refreshWorkspace() {
+    setError("");
+    setBusy(true);
+    try {
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Workspace could not refresh.");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function act(action: () => Promise<unknown>) {
     setError("");
     setBusy(true);
@@ -1061,7 +1080,7 @@ export default function Workspace() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void act(refresh)}
+                onClick={() => void refreshWorkspace()}
               >
                 ↻ Refresh
               </button>

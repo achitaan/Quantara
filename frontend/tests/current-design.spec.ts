@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, openWorkspace, signIn } from "./fixtures";
 import type { Portfolio } from "../lib/client";
 
 const portfolios: Portfolio[] = [
@@ -58,18 +58,6 @@ const portfolios: Portfolio[] = [
   },
 ];
 
-async function signIn(page: Page) {
-  await page.goto("/");
-  await page
-    .getByRole("textbox", { name: "Username", exact: true })
-    .fill("demo");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.TEAM_PASSWORD!);
-  await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.locator(".current-hero h1")).toBeVisible();
-}
-
 test("Current uses the active portfolio currency and fractional holdings", async ({
   page,
 }) => {
@@ -101,7 +89,7 @@ test("Current uses the active portfolio currency and fractional holdings", async
       ],
     }),
   );
-  await signIn(page);
+  await openWorkspace(page);
   await expect(page.locator(".current-hero h1")).toHaveText("Core portfolio");
   await expect(page.locator(".current-cash")).toContainText("63,500");
   await expect(page.locator(".current-cash")).toContainText("USD");
@@ -210,7 +198,7 @@ test("Current empty state offers a working portfolio creation path", async ({
   page,
 }) => {
   await page.route("**/api/portfolios", (route) => route.fulfill({ json: [] }));
-  await signIn(page);
+  await openWorkspace(page);
   await expect(page.locator(".current-cash")).not.toContainText("$0");
   await expect(
     page.getByRole("heading", {
@@ -231,7 +219,7 @@ test("all research tools remain reachable on desktop and mobile", async ({
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await signIn(page);
+  await openWorkspace(page);
   const sections = [
     "Overview",
     "Portfolio",
@@ -291,7 +279,7 @@ test("successful sign out returns to login without refreshing protected data", a
 test("failed sign out keeps the workspace available and reports the failure", async ({
   page,
 }) => {
-  await signIn(page);
+  await openWorkspace(page);
   await page.route("**/api/auth/logout", (route) =>
     route.fulfill({
       status: 503,
@@ -330,7 +318,7 @@ for (const failure of ["network", "server"] as const) {
       }
       await route.fulfill({ json: settings });
     });
-    await signIn(page);
+    await openWorkspace(page);
     await page.getByLabel("Account menu", { exact: true }).click();
     await page
       .getByRole("button", { name: "Switch to dark mode", exact: true })
